@@ -1,0 +1,4 @@
+id,fasta
+sample1,/path/to/sample1.fasta
+sample2,/path/to/sample2.fasta
+sample3,/path/to/sample3.fasta

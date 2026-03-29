@@ -1,0 +1,8 @@
+name: enteric_sistr
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - sistr_cmd=1.1.2
+  - blast

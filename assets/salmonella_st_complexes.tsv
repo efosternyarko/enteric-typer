@@ -1,0 +1,32 @@
+st	st_complex	serovar_typical	notes
+1	ST1 complex	Choleraesuis/Paratyphi C
+11	ST11 complex	Enteritidis	Global pandemic serovar; poultry-associated
+14	ST14 complex	Dublin	Bovine; invasive human disease
+17	ST17 complex	Virchow
+19	ST19 complex	Typhimurium	Global pandemic serovar; zoonotic
+26	ST26 complex	Gallinarum/Pullorum	Poultry pathogen; host-restricted
+28	ST28 complex	Heidelberg
+34	ST34 complex	Typhimurium 4,[5],12:i:-	Monophasic Typhimurium; MDR DT104
+36	ST36 complex	Newport
+43	ST43 complex	Infantis	Emerging poultry-associated; ESBL
+45	ST45 complex	Anatum
+47	ST47 complex	Mbandaka
+48	ST48 complex	Kentucky	Poultry; ciprofloxacin-resistant strains
+64	ST64 complex	Typhimurium phage type 4
+66	ST66 complex	Hadar
+68	ST68 complex	Schwarzengrund
+74	ST74 complex	Saintpaul
+155	ST155 complex	Reading
+183	ST183 complex	Virchow
+188	ST188 complex	Typhimurium 4,12:d:-
+209	ST209 complex	Montevideo
+213	ST213 complex	Newport MDR-AmpC
+218	ST218 complex	Typhimurium
+273	ST273 complex	Infantis
+274	ST274 complex	Dublin
+282	ST282 complex	Typhimurium 4,5,12:i:-
+292	ST292 complex	Infantis
+313	ST313 complex	Typhimurium	Invasive non-typhoidal Salmonella; Africa
+321	ST321 complex	Enteritidis
+410	ST410 complex	Heidelberg
+646	ST646 complex	Typhimurium

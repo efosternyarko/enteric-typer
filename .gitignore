@@ -1,0 +1,44 @@
+# Nextflow work directories and cache
+work/
+.nextflow/
+.nextflow.log*
+.nextflow.pid
+.nextflow.history
+
+# Pipeline output
+results/
+test_results/
+
+# Reference genomes (large binary/FASTA files — build locally)
+assets/reference_genomes/
+assets/*.msh
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Conda/mamba environments (local)
+.conda/
+envs/.snakemake/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# JetBrains / VSCode
+.idea/
+.vscode/
+*.iml
+
+# Claude Code settings
+.claude/
+
+# Secrets — NEVER commit
+.env
+secrets.json
+*.key

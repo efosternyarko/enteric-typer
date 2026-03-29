@@ -1,0 +1,3 @@
+id,fasta
+ecoli_test1,/path/to/ecoli_test1.fasta
+salmonella_test1,/path/to/salmonella_test1.fasta

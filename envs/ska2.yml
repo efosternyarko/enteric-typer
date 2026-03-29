@@ -1,0 +1,7 @@
+name: enteric_ska2
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - ska2=0.3.4
