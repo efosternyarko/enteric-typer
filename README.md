@@ -9,7 +9,7 @@ appropriate species-specific typing tools, generates a core-SNP phylogeny, and
 
 | Species | Typing tools | Pathogenwatch |
 |---|---|---|
-| *Escherichia coli* | MLST (Achtman), AMRFinder, ECTyper (serotype), PlasmidFinder | Yes |
+| *Escherichia coli* | MLST (Achtman), AMRFinder, ECTyper (serotype), PlasmidFinder, Kaptive (K-locus) | Yes |
 | *Salmonella enterica* | MLST, AMRFinder, SISTR (serovar), PlasmidFinder | Yes |
 | Other / unclassified | Species ID only (logged and skipped) | — |
 
@@ -19,9 +19,9 @@ appropriate species-specific typing tools, generates a core-SNP phylogeny, and
 Input assemblies (folder or samplesheet)
         │
         ▼
-┌───────────────────┐
+┌────────────────────┐
 │  1. SPECIES CHECK  │  Mash distance against 7-species reference sketch
-└───────────────────┘
+└────────────────────┘
         │
    ┌────┴────┐
    ▼         ▼
@@ -31,12 +31,14 @@ E. coli   Salmonella   (other species logged and skipped)
 ┌────────────────────────────────────────────────────────────┐
 │  2. SPECIES-SPECIFIC TYPING  (all tools run in parallel)   │
 │                                                            │
-│  E. coli              Salmonella                           │
-│  ─────────────────    ──────────────────────               │
-│  MLST (achtman_4)     MLST (salmonella)                    │
-│  AMRFinder            AMRFinder                            │
-│  ECTyper (O:H)        SISTR (serovar)                      │
-│  PlasmidFinder        PlasmidFinder                        │
+│  E. coli                  Salmonella                       │
+│  ─────────────────────    ───────────────────────          │
+│  MLST (achtman_4)         MLST (salmonella)                │
+│  AMRFinder                AMRFinder                        │
+│  ECTyper (O:H serotype)   SISTR (serovar)                  │
+│  PlasmidFinder            PlasmidFinder                    │
+│  Kaptive K-locus (G2/G3                                    │
+│    → G1/G4 on untypeables)                                 │
 └────────────────────────────────────────────────────────────┘
         │
         ▼
@@ -64,41 +66,168 @@ E. coli   Salmonella   (other species logged and skipped)
 │  6. MICROREACT                                        │
 │  Results TSV + IQ-TREE Newick → Microreact project   │
 └──────────────────────────────────────────────────────┘
+        │
+        ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  7. SUMMARY PLOTS  (always runs — no API keys required)           │
+│  Fig 1: ST distribution · serotypes · AMR prevalence · MDR       │
+│  Fig 2: Core-SNP tree + phylogroup strip + AMR heatmap           │
+│  Fig 3: Top AMR genes (intrinsic genes excluded via AMRrules)     │
+│  Fig 4: Plasmid replicon types                                    │
+└───────────────────────────────────────────────────────────────────┘
 ```
+
+---
 
 ## Installation
 
-### Prerequisites
-
-- [Nextflow](https://www.nextflow.io/) ≥ 23.04
-- [conda](https://docs.conda.io/) or [mamba](https://mamba.readthedocs.io/)
-  (or Docker / Singularity)
+### Step 1 — Clone the repository
 
 ```bash
-# Install Nextflow
-curl -s https://get.nextflow.io | bash
-mv nextflow ~/bin/   # or wherever you keep executables
-
-# Install mamba (optional but faster for conda env solving)
-conda install -n base -c conda-forge mamba
+git clone https://github.com/efosternyarko/enteric-typer
+cd enteric-typer
 ```
 
-### Build the Mash reference sketch (required before first run)
+---
+
+### Step 2 — Install Java
+
+Nextflow requires Java 17 or later (Java 21 recommended).
+
+**macOS**
+```bash
+brew install --cask temurin
+```
+> If Homebrew is not yet installed, run:
+> ```bash
+> /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+> ```
+
+**Linux (Debian/Ubuntu)**
+```bash
+sudo apt update && sudo apt install -y default-jdk
+```
+
+**Windows (PowerShell)**
+```powershell
+winget install EclipseAdoptium.Temurin.21.JDK   # Java 21 (recommended)
+# or
+winget install EclipseAdoptium.Temurin.25.JDK   # Java 25 (latest)
+```
+
+Verify: `java -version`
+
+---
+
+### Step 3 — Install Nextflow
 
 ```bash
-# Install ncbi-datasets-cli if needed
-conda install -c conda-forge ncbi-datasets-cli
+curl -s https://get.nextflow.io | bash
+```
 
-# Build the 7-species reference sketch (~1–5 min depending on bandwidth)
+The installer creates a `nextflow` executable in the current directory. Move it
+somewhere on your `$PATH` so it can be run from anywhere:
+
+**macOS/Linux**
+```bash
+mv nextflow ~/bin/
+# If ~/bin/ does not exist yet:
+mkdir -p ~/bin
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc   # zsh (default on macOS)
+# or ~/.bashrc for bash
+source ~/.zshrc
+```
+
+**Windows (PowerShell)**
+```powershell
+mkdir "$HOME\bin"
+Move-Item nextflow.exe "$HOME\bin\"
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";$HOME\bin", "User")
+```
+Then restart PowerShell.
+
+Verify: `nextflow -version`
+
+---
+
+### Step 4 — Install conda + mamba
+
+If conda is not already installed, the quickest route is **Miniforge**, which
+bundles both conda and mamba together:
+
+**macOS (Apple Silicon / arm64)**
+```bash
+curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh"
+bash Miniforge3-MacOSX-arm64.sh
+```
+
+**macOS (Intel / x86_64)**
+```bash
+curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-x86_64.sh"
+bash Miniforge3-MacOSX-x86_64.sh
+```
+
+**Linux (x86_64)**
+```bash
+curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh"
+bash Miniforge3-Linux-x86_64.sh
+```
+
+When the installer asks:
+```
+Do you wish the installer to initialize Miniforge3
+by running conda init? [yes|no]
+```
+Answer **yes**. Then reload your shell:
+
+```bash
+source ~/.zshrc    # macOS (zsh)
+# or
+source ~/.bashrc   # Linux (bash)
+```
+
+**Windows**
+Download the [Miniforge3 Windows installer](https://github.com/conda-forge/miniforge/releases/latest)
+and run it. When prompted, select *Add Miniforge to my PATH*. Then reinitialise:
+```powershell
+conda init powershell
+```
+Restart PowerShell.
+
+> **Already have conda but not mamba?**
+> ```bash
+> conda install -n base -c conda-forge mamba
+> ```
+
+---
+
+### Step 5 — Install ncbi-datasets-cli
+
+Required by `build_references.sh` to download reference genomes from NCBI:
+
+```bash
+mamba install -c conda-forge ncbi-datasets-cli
+```
+
+---
+
+### Step 6 — Build the Mash reference sketch
+
+This downloads 7 reference genomes from NCBI and builds the Mash sketch used
+for species identification. Run once before the first pipeline execution:
+
+```bash
 bash assets/build_references.sh
 ```
 
-This downloads 7 reference genomes from NCBI and produces
-`assets/enteric_species_refs.msh`.
+Output: `assets/enteric_species_refs.msh`
+Expected runtime: 1–5 minutes depending on bandwidth.
+
+---
 
 ## Quick start
 
-### 1. From a folder of assemblies
+### For a given folder of assemblies
 
 ```bash
 nextflow run main.nf \
@@ -107,7 +236,7 @@ nextflow run main.nf \
     -profile conda
 ```
 
-### 2. From a samplesheet (CSV: id,fasta)
+### From a samplesheet (CSV: id,fasta)
 
 ```bash
 # Auto-generate samplesheet from a folder
@@ -122,7 +251,7 @@ nextflow run main.nf \
     -profile conda
 ```
 
-### 3. Full run with Pathogenwatch + Microreact
+### Full run with Pathogenwatch + Microreact
 
 ```bash
 # Set API keys once
@@ -137,6 +266,8 @@ nextflow run main.nf \
     --microreact_project   "My enteric outbreak" \
     -profile conda
 ```
+
+---
 
 ## Parameters
 
@@ -154,6 +285,8 @@ nextflow run main.nf \
 | `--iqtree_model` | `GTR+G` | IQ-TREE substitution model |
 | `--iqtree_bootstraps` | `1000` | IQ-TREE ultrafast bootstrap replicates |
 
+---
+
 ## Output files
 
 ```
@@ -164,7 +297,7 @@ results/
 │   └── dag.svg
 │
 ├── species_check/
-│   └── *_species.txt          ← best species + Mash distance per sample
+│   └── *_species.txt              ← best species + Mash distance per sample
 │
 ├── mlst_ecoli/
 │   └── *_ecoli_achtman_4_mlst.tsv
@@ -172,6 +305,8 @@ results/
 │   └── *_amrfinder.tsv
 ├── ectyper/
 │   └── *_ectyper.tsv
+├── kaptive/
+│   └── *_ktype.tsv                ← K-locus group, locus, type, confidence
 ├── plasmidfinder_ecoli/
 │   └── *_plasmidfinder.tsv
 │
@@ -187,26 +322,37 @@ results/
 ├── ska2_ecoli/
 │   └── ska2_alignment.fasta
 ├── iqtree_ecoli/
-│   ├── iqtree.treefile        ← Newick ML tree
-│   └── iqtree.iqtree          ← IQ-TREE log
+│   ├── iqtree.treefile             ← Newick ML tree
+│   └── iqtree.iqtree               ← IQ-TREE log
 ├── ska2_salmonella/
 │   └── ska2_alignment.fasta
 ├── iqtree_salmonella/
 │   ├── iqtree.treefile
 │   └── iqtree.iqtree
 │
-├── pathogenwatch/             ← (if --run_pathogenwatch)
+├── pathogenwatch/                  ← (if --run_pathogenwatch)
 │   ├── ecoli_pathogenwatch_samples.tsv
 │   ├── ecoli_pathogenwatch_collection.json
 │   ├── ecoli_pathogenwatch_tree.nwk
 │   ├── salmonella_pathogenwatch_samples.tsv
 │   └── salmonella_pathogenwatch_collection.json
 │
-├── ecoli_typer_results.tsv    ← Master results table (E. coli)
-├── salmonella_typer_results.tsv ← Master results table (Salmonella)
+├── ecoli_typer_results.tsv         ← Master results table (E. coli)
+├── salmonella_typer_results.tsv    ← Master results table (Salmonella)
 │
-└── microreact_url_*.txt       ← (if --upload_microreact) Microreact project URLs
+├── microreact_url_*.txt            ← (if --upload_microreact) Microreact URLs
+│
+├── ecoli_fig1_population_summary.{pdf,png}
+├── ecoli_fig3_amr_genes.{pdf,png}
+├── ecoli_fig4_plasmid_replicons.{pdf,png}
+├── ecoli_tree_amr.{pdf,png}        ← Phylogeny + AMR heatmap
+├── salmonella_fig1_population_summary.{pdf,png}
+├── salmonella_fig3_amr_genes.{pdf,png}
+├── salmonella_fig4_plasmid_replicons.{pdf,png}
+└── salmonella_tree_amr.{pdf,png}
 ```
+
+---
 
 ## Execution profiles
 
@@ -220,6 +366,8 @@ results/
 | `pbs` | PBS/Torque HPC executor |
 | `test` | Quick test run (no uploads) |
 
+---
+
 ## HPC example
 
 ```bash
@@ -229,6 +377,8 @@ nextflow run main.nf \
     -profile singularity,slurm \
     -c custom.config   # optional: override queue, project account, etc.
 ```
+
+---
 
 ## Updating the reference sketch
 
@@ -244,6 +394,8 @@ filenames must start with a recognisable prefix:
 | `Klebsiella_` | `Klebsiella` |
 | `Enterobacter_` | `Enterobacter` |
 
+---
+
 ## Citation
 
 If you use enteric-typer, please cite the tools it wraps:
@@ -254,7 +406,9 @@ If you use enteric-typer, please cite the tools it wraps:
 - **ECTyper**: Laing et al. (2019) Microbial Genomics 5(12)
 - **SISTR**: Yoshida et al. (2016) PLOS ONE 11(1):e0147101
 - **PlasmidFinder**: Carattoli et al. (2014) Antimicrobial Agents and Chemotherapy
+- **Kaptive**: Wyres et al. (2016) Microbial Genomics 2(10); Lam et al. (2022) Nature Protocols
 - **SKA2**: github.com/bacpop/ska.rust
 - **IQ-TREE 2**: Minh et al. (2020) Molecular Biology and Evolution 37(5)
 - **Pathogenwatch**: Argimón et al. (2021) Nature Communications 12:2732
 - **Microreact**: Argimón et al. (2016) Microbial Genomics 2(11)
+- **AMRrules**: github.com/AMRverse/AMRrules

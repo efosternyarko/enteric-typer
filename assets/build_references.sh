@@ -13,18 +13,16 @@
 #   Shigella sonnei Ss046                GCF_000006925.2  (to flag Shigella)
 #   Klebsiella pneumoniae HS11286        GCF_000240185.1  (common enteric)
 #
-# Requirements: ncbi-datasets-cli (conda install -c conda-forge ncbi-datasets-cli)
-#               mash (conda install -c bioconda mash)
-#               OR: wget + gunzip
+# Requirements:
+#   ncbi-datasets-cli  (mamba install -c conda-forge ncbi-datasets-cli)
+#   mash               (conda install -c bioconda mash)
 #
-# Usage:
+# Usage (run from the repo root):
 #   bash assets/build_references.sh
 #
 # Output:
 #   assets/enteric_species_refs.msh   (Mash sketch)
 # ─────────────────────────────────────────────────────────────────────────────
-
-set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REFS_DIR="${SCRIPT_DIR}/reference_genomes"
@@ -32,76 +30,104 @@ SKETCH="${SCRIPT_DIR}/enteric_species_refs.msh"
 KMER_SIZE=21
 SKETCH_SIZE=1000
 
+# ── Dependency checks ─────────────────────────────────────────────────────────
+if ! command -v datasets &>/dev/null; then
+    echo "ERROR: 'datasets' (ncbi-datasets-cli) is not installed."
+    echo "Install with:  mamba install -c conda-forge ncbi-datasets-cli"
+    exit 1
+fi
+
+if ! command -v mash &>/dev/null; then
+    echo "ERROR: 'mash' is not installed."
+    echo "Install with:  conda install -c bioconda mash"
+    exit 1
+fi
+
 mkdir -p "${REFS_DIR}"
 cd "${REFS_DIR}"
 
-echo "Downloading reference genomes from NCBI..."
+FAILED=0
 
-# ── Download function using ncbi-datasets or fallback to direct FTP ───────────
+# ── Download function ─────────────────────────────────────────────────────────
 download_genome() {
     local accession="$1"
     local label="$2"
     local outfile="${label}.fasta"
 
-    if [ -f "${outfile}" ]; then
-        echo "  [SKIP] ${label} already exists"
-        return
+    if [ -f "${outfile}" ] && [ -s "${outfile}" ]; then
+        echo "  [SKIP] ${label} already present"
+        return 0
     fi
 
     echo "  Downloading ${label} (${accession})..."
 
-    # Try datasets CLI first (most reliable)
-    if command -v datasets &>/dev/null; then
-        datasets download genome accession "${accession}" \
+    # Download ZIP from NCBI datasets
+    if ! datasets download genome accession "${accession}" \
             --include genome \
-            --filename "${accession}.zip" 2>/dev/null
-        unzip -p "${accession}.zip" "ncbi_dataset/data/${accession}/"*".fna" > "${outfile}" 2>/dev/null \
-            || unzip -p "${accession}.zip" "*/*.fna" > "${outfile}" 2>/dev/null
-        rm -f "${accession}.zip"
-    else
-        # Fallback: direct NCBI FTP via esearch/efetch (requires entrez-direct)
-        if command -v efetch &>/dev/null; then
-            efetch -db assembly -id "${accession}" -format docsum \
-                | grep -oP 'FtpPath_RefSeq":\s*"\K[^"]+' \
-                | xargs -I{} wget -q "{}/{}_genomic.fna.gz" -O "${accession}.fna.gz" 2>/dev/null
-            gunzip -c "${accession}.fna.gz" > "${outfile}"
-            rm -f "${accession}.fna.gz"
-        else
-            echo "ERROR: Neither 'datasets' nor 'efetch' found."
-            echo "Install with: conda install -c conda-forge ncbi-datasets-cli"
-            exit 1
-        fi
+            --filename "${accession}.zip" 2>/dev/null; then
+        echo "  WARNING: datasets download failed for ${accession} — skipping"
+        FAILED=$((FAILED + 1))
+        return 1
     fi
 
-    if [ -s "${outfile}" ]; then
-        echo "    → ${outfile} ($(wc -l < "${outfile}") lines)"
+    # Extract all .fna files from the ZIP into a temp directory
+    local tmpdir="${accession}_tmp"
+    mkdir -p "${tmpdir}"
+    unzip -o "${accession}.zip" -d "${tmpdir}" >/dev/null 2>&1
+
+    # Find the assembly FASTA (exclude *_from_genomic.fna CDS files)
+    local fasta
+    fasta=$(find "${tmpdir}" -name "*.fna" \
+            ! -name "*_cds_from_*" \
+            ! -name "*_rna_from_*" \
+            | head -1)
+
+    if [ -n "${fasta}" ] && [ -s "${fasta}" ]; then
+        cp "${fasta}" "${outfile}"
+        echo "    → ${outfile} ($(grep -c '^>' "${outfile}") sequences)"
     else
-        echo "  WARNING: ${outfile} is empty. Check accession ${accession}."
+        echo "  WARNING: could not extract FASTA for ${accession}"
+        FAILED=$((FAILED + 1))
     fi
+
+    rm -rf "${tmpdir}" "${accession}.zip"
 }
 
 # ── Reference genome downloads ────────────────────────────────────────────────
-# E. coli references (both labelled Ecoli_ so species_check maps them to E_coli)
+echo "Downloading reference genomes from NCBI..."
+echo ""
+
+# E. coli references — prefix 'Ecoli_' → species_check maps to 'E_coli'
 download_genome GCF_000005845.2  "Ecoli_K12_MG1655"
 download_genome GCF_000006665.3  "Ecoli_O157H7_EDL933"
 
-# Salmonella references (labelled Salmonella_ → Salmonella_enterica)
+# Salmonella references — prefix 'Salmonella_' → 'Salmonella_enterica'
 download_genome GCF_000006945.2  "Salmonella_Typhimurium_LT2"
 download_genome GCF_000195995.1  "Salmonella_Typhi_CT18"
 download_genome GCF_000009505.1  "Salmonella_Enteritidis_P125109"
 
-# Shigella (labelled Shigella_ → rejected by species gate but logged)
+# Shigella — rejected by species gate but identified in logs
 download_genome GCF_000006925.2  "Shigella_sonnei_Ss046"
 
-# Klebsiella (labelled Klebsiella_ → rejected but identified)
+# Klebsiella — rejected by species gate but identified in logs
 download_genome GCF_000240185.1  "Klebsiella_pneumoniae_HS11286"
 
 # ── Build Mash sketch ─────────────────────────────────────────────────────────
 echo ""
-echo "Building Mash sketch (k=${KMER_SIZE}, s=${SKETCH_SIZE})..."
-FASTAS=(Ecoli_*.fasta Salmonella_*.fasta Shigella_*.fasta Klebsiella_*.fasta)
+echo "Collecting FASTA files for sketch..."
+FASTAS=()
+for f in Ecoli_*.fasta Salmonella_*.fasta Shigella_*.fasta Klebsiella_*.fasta; do
+    [ -s "${f}" ] && FASTAS+=("${f}")
+done
+
 N="${#FASTAS[@]}"
-echo "  ${N} reference genome(s) found"
+if [ "${N}" -eq 0 ]; then
+    echo "ERROR: No reference genomes downloaded successfully. Cannot build sketch."
+    exit 1
+fi
+
+echo "  ${N} reference genome(s) found — building Mash sketch..."
+echo "  (k=${KMER_SIZE}, sketch_size=${SKETCH_SIZE})"
 
 mash sketch \
     -k "${KMER_SIZE}" \
@@ -110,7 +136,18 @@ mash sketch \
     "${FASTAS[@]}"
 
 echo ""
-echo "Done! Reference sketch written to:"
-echo "  ${SKETCH}"
-echo ""
-echo "Verify with: mash info ${SKETCH}"
+if [ -f "${SKETCH}" ]; then
+    echo "Done! Reference sketch written to:"
+    echo "  ${SKETCH}"
+    echo ""
+    echo "Verify with:"
+    echo "  mash info ${SKETCH}"
+    if [ "${FAILED}" -gt 0 ]; then
+        echo ""
+        echo "NOTE: ${FAILED} genome(s) failed to download. The sketch was built"
+        echo "with the remaining ${N} genome(s). Re-run to retry failed downloads."
+    fi
+else
+    echo "ERROR: Mash sketch was not created. Check the output above for errors."
+    exit 1
+fi
