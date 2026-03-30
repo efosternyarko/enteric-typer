@@ -160,8 +160,9 @@ workflow {
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 3: Core-SNP phylogenetics (SKA2 + IQ-TREE) per species
     // ─────────────────────────────────────────────────────────────────────────
-    ch_ecoli_fastas      = ch_ecoli.map      { id, fasta -> fasta }.collect().ifEmpty(['NO_FASTAS'])
-    ch_salmonella_fastas = ch_salmonella.map { id, fasta -> fasta }.collect().ifEmpty(['NO_FASTAS'])
+    // Only run SKA2/IQ-TREE when enough samples exist; .filter skips empty collections
+    ch_ecoli_fastas      = ch_ecoli.map      { id, fasta -> fasta }.collect().filter { it.size() > 0 }
+    ch_salmonella_fastas = ch_salmonella.map { id, fasta -> fasta }.collect().filter { it.size() > 0 }
 
     SKA2_ECOLI(ch_ecoli_fastas)
     SKA2_SALMONELLA(ch_salmonella_fastas)
