@@ -13,6 +13,9 @@ test_results/
 assets/reference_genomes/
 assets/*.msh
 
+# Kaptive databases are tracked via Git LFS (see .gitattributes)
+# Do NOT add assets/kaptive_dbs/ here — LFS handles them
+
 # Python
 __pycache__/
 *.py[cod]

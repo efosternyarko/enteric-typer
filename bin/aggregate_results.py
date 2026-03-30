@@ -147,6 +147,27 @@ def load_sistr(files: list[str]) -> dict[str, dict]:
     return results
 
 
+def load_ktype(files: list[str]) -> dict[str, dict]:
+    """Load parse_kaptive per-sample TSV files → {sample: {k_group, k_locus, k_type, ...}}."""
+    results: dict[str, dict] = {}
+    for f in files:
+        if not _valid(f):
+            continue
+        with open(f) as fh:
+            reader = csv.DictReader(fh, delimiter="\t")
+            for row in reader:
+                sid = (row.get("sample") or "").strip()
+                if not sid:
+                    continue
+                results[sid] = {
+                    "k_group":      _na(row.get("k_group")),
+                    "k_locus":      _na(row.get("k_locus")),
+                    "k_type":       _na(row.get("k_type")),
+                    "k_confidence": _na(row.get("k_confidence")),
+                }
+    return results
+
+
 def load_pathogenwatch(path: str) -> dict[str, dict]:
     """Load Pathogenwatch per-sample TSV."""
     results: dict[str, dict] = {}
@@ -188,6 +209,7 @@ ECOLI_COLUMNS = [
     "sample",
     "mlst_scheme", "mlst_st", "mlst_st_complex",
     "ectyper_O", "ectyper_H", "ectyper_serotype", "ectyper_qc", "ectyper_evidence",
+    "k_group", "k_locus", "k_type", "k_confidence",
     "amrfinder_genes", "amrfinder_drug_classes",
     "plasmidfinder_replicons",
     "pw_status", "pw_species", "pw_genome_uuid", "pw_collection_url",
@@ -226,6 +248,8 @@ def main() -> None:
     parser.add_argument("--serotyper",     nargs="+", default=[],
                         help="ECTyper files (ecoli) or SISTR files (salmonella)")
     parser.add_argument("--plasmidfinder", nargs="+", default=[])
+    parser.add_argument("--ktype",         nargs="+", default=[],
+                        help="parse_kaptive output TSV files (E. coli only)")
     parser.add_argument("--pathogenwatch", default="NO_FILE")
     parser.add_argument("--st-complexes",  default=None)
     parser.add_argument("--output",        required=True)
@@ -236,6 +260,7 @@ def main() -> None:
     amr_genes       = load_amrfinder(args.amrfinder)
     amr_classes     = load_amrfinder_classes(args.amrfinder)
     plasmid_data    = load_plasmidfinder(args.plasmidfinder)
+    ktype_data      = load_ktype(args.ktype) if args.species == "ecoli" else {}
     pw_data         = load_pathogenwatch(args.pathogenwatch)
 
     if args.species == "ecoli":
@@ -251,6 +276,7 @@ def main() -> None:
         list(amr_genes.keys()) +
         list(sero_data.keys()) +
         list(plasmid_data.keys()) +
+        list(ktype_data.keys()) +
         list(pw_data.keys())
     ))
 
@@ -276,6 +302,7 @@ def main() -> None:
             st = ml.get("mlst_st", "NA")
             pw = pw_data.get(sid, {})
             sr = sero_data.get(sid, {})
+            kt = ktype_data.get(sid, {})
 
             row: dict = {
                 "sample":               sid,
@@ -295,6 +322,15 @@ def main() -> None:
             # Add cluster columns from pathogenwatch
             for col in all_pw_cluster_cols:
                 row[col] = pw.get(col, "NA")
+
+            # K-type columns (E. coli only)
+            if args.species == "ecoli":
+                row.update({
+                    "k_group":      kt.get("k_group",      "NA"),
+                    "k_locus":      kt.get("k_locus",      "NA"),
+                    "k_type":       kt.get("k_type",       "NA"),
+                    "k_confidence": kt.get("k_confidence", "NA"),
+                })
 
             # Species-specific serotyping columns
             if args.species == "ecoli":

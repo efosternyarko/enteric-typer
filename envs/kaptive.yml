@@ -1,0 +1,9 @@
+name: enteric_kaptive
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - kaptive=3.0.0b5
+  - biopython
+  - pandas

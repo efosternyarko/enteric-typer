@@ -8,6 +8,7 @@ nextflow.enable.dsl = 2
  *
  * Phase 1 – species gate (Mash) against reference sketch
  * Phase 2 – species-specific typing in parallel
+ * Phase 2c– K-locus typing (E. coli only): G2/G3 → G1/G4 on untypeables
  * Phase 3 – SKA2 core-SNP alignment + IQ-TREE per species
  * Phase 4 – Pathogenwatch upload + multi-threshold cgMLST clustering (optional)
  * Phase 5 – Aggregation + Microreact project creation (optional)
@@ -21,6 +22,9 @@ include { MLST          as MLST_SALMONELLA          } from './modules/mlst'
 include { AMRFINDER     as AMRFINDER_ECOLI          } from './modules/amrfinder'
 include { AMRFINDER     as AMRFINDER_SALMONELLA     } from './modules/amrfinder'
 include { ECTYPER                                   } from './modules/ectyper'
+include { KAPTIVE_G2G3                              } from './modules/kaptive'
+include { KAPTIVE_G1G4                              } from './modules/kaptive'
+include { PARSE_KAPTIVE                             } from './modules/kaptive'
 include { SISTR                                     } from './modules/sistr'
 include { PLASMIDFINDER as PLASMIDFINDER_ECOLI      } from './modules/plasmidfinder'
 include { PLASMIDFINDER as PLASMIDFINDER_SALMONELLA } from './modules/plasmidfinder'
@@ -98,6 +102,50 @@ workflow {
     PLASMIDFINDER_ECOLI(ch_ecoli, 'enterobacteriaceae')
 
     // ─────────────────────────────────────────────────────────────────────────
+    // PHASE 2c: E. coli K-locus typing
+    //   Step 1: Run G2/G3 database on ALL E. coli samples
+    //   Step 2: Run G1/G4 (scores + normalise) on G2/G3-untypeable samples only
+    //   Step 3: Merge results — G1/G4 and G2/G3 are mutually exclusive
+    // ─────────────────────────────────────────────────────────────────────────
+    ch_g2g3_db        = file("${projectDir}/assets/kaptive_dbs/EC-K-typing_group2and3_v3.0.0.gbk",
+                              checkIfExists: true)
+    ch_g1g4_db        = file("${projectDir}/assets/kaptive_dbs/EC-K-typing_group1and4_v0.9.gbk",
+                              checkIfExists: true)
+    ch_normalise_script = file("${projectDir}/bin/normalise_kaptive_scores.py",
+                              checkIfExists: true)
+
+    KAPTIVE_G2G3(ch_ecoli, ch_g2g3_db)
+
+    // Route samples: G2/G3 typeable → skip G1/G4; untypeable → run G1/G4
+    KAPTIVE_G2G3.out.results
+        .branch {
+            typed:     it[2].text.contains('Perfect') || it[2].text.contains('Very High') ||
+                       it[2].text.contains('High')    || it[2].text.contains('Good') ||
+                       it[2].text.contains('Low')
+            untypeable: true
+        }
+        .set { ch_g2g3_branched }
+
+    ch_for_g1g4 = ch_g2g3_branched.untypeable.map { id, fasta, g2g3_tsv -> tuple(id, fasta) }
+    KAPTIVE_G1G4(ch_for_g1g4, ch_g1g4_db, ch_normalise_script)
+
+    // Pair G2/G3 + G1/G4 results (G1/G4 result is absent for G2/G3-typed samples)
+    ch_g2g3_for_merge = KAPTIVE_G2G3.out.results.map { id, fasta, tsv -> tuple(id, tsv) }
+    ch_g1g4_for_merge = KAPTIVE_G1G4.out.results
+        .mix(
+            // For G2/G3-typed samples, emit a no-op placeholder for G1/G4
+            ch_g2g3_branched.typed.map { id, fasta, g2g3_tsv ->
+                tuple(id, file("${workDir}/NO_G1G4_${id}.tsv"))
+            }
+        )
+
+    PARSE_KAPTIVE(
+        ch_g2g3_for_merge.join(ch_g1g4_for_merge)
+    )
+
+    ch_ecoli_ktype = PARSE_KAPTIVE.out.ktype.map { id, f -> f }.collect().ifEmpty([])
+
+    // ─────────────────────────────────────────────────────────────────────────
     // PHASE 2b: Salmonella typing (parallel per sample)
     // ─────────────────────────────────────────────────────────────────────────
     MLST_SALMONELLA(ch_salmonella,          'salmonella')
@@ -156,6 +204,7 @@ workflow {
         AMRFINDER_ECOLI.out.map    { id, f -> f }.collect().ifEmpty([]),
         ECTYPER.out.map            { id, f -> f }.collect().ifEmpty([]),
         PLASMIDFINDER_ECOLI.out.map{ id, f -> f }.collect().ifEmpty([]),
+        ch_ecoli_ktype,
         ch_pw_ecoli_out,
         file("${projectDir}/assets/ecoli_st_complexes.tsv"),
         'ecoli'
@@ -166,6 +215,7 @@ workflow {
         AMRFINDER_SALMONELLA.out.map    { id, f -> f }.collect().ifEmpty([]),
         SISTR.out.map                   { id, f -> f }.collect().ifEmpty([]),
         PLASMIDFINDER_SALMONELLA.out.map{ id, f -> f }.collect().ifEmpty([]),
+        [],   // no K-typing for Salmonella
         ch_pw_salmonella_out,
         file("${projectDir}/assets/salmonella_st_complexes.tsv"),
         'salmonella'
