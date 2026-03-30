@@ -271,7 +271,10 @@ nextflow run main.nf \
 # Set API keys once
 nextflow secrets set PW_API_KEY       <your_pathogenwatch_key>
 nextflow secrets set MICROREACT_TOKEN <your_microreact_token>
+```
 
+```bash
+# Run the workflow
 nextflow run main.nf \
     --input_dir            /path/to/assemblies/ \
     --outdir               results/ \
