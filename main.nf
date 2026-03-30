@@ -38,6 +38,10 @@ include { AGGREGATE     as AGGREGATE_ECOLI          } from './modules/aggregate'
 include { AGGREGATE     as AGGREGATE_SALMONELLA     } from './modules/aggregate'
 include { MICROREACT_UPLOAD as MICROREACT_ECOLI     } from './modules/microreact_upload'
 include { MICROREACT_UPLOAD as MICROREACT_SALMONELLA} from './modules/microreact_upload'
+include { PLOT_SUMMARY      as PLOT_SUMMARY_ECOLI      } from './modules/plot_summary'
+include { PLOT_SUMMARY      as PLOT_SUMMARY_SALMONELLA } from './modules/plot_summary'
+include { TREE_ANNOTATION   as TREE_ANNOTATION_ECOLI      } from './modules/tree_annotation'
+include { TREE_ANNOTATION   as TREE_ANNOTATION_SALMONELLA } from './modules/tree_annotation'
 
 // ── Parameter validation ──────────────────────────────────────────────────────
 if (!params.samplesheet && !params.input_dir) {
@@ -239,6 +243,26 @@ workflow {
             "${params.microreact_project} – Salmonella"
         )
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PHASE 7: Summary plots (default — no API keys required)
+    // ─────────────────────────────────────────────────────────────────────────
+    PLOT_SUMMARY_ECOLI(AGGREGATE_ECOLI.out.results,      'ecoli')
+    PLOT_SUMMARY_SALMONELLA(AGGREGATE_SALMONELLA.out.results, 'salmonella')
+
+    ch_ecoli_tree_for_annot      = IQTREE_ECOLI.out.treefile.ifEmpty(file('NO_FILE'))
+    ch_salmonella_tree_for_annot = IQTREE_SALMONELLA.out.treefile.ifEmpty(file('NO_FILE'))
+
+    TREE_ANNOTATION_ECOLI(
+        ch_ecoli_tree_for_annot,
+        AGGREGATE_ECOLI.out.results,
+        'ecoli'
+    )
+    TREE_ANNOTATION_SALMONELLA(
+        ch_salmonella_tree_for_annot,
+        AGGREGATE_SALMONELLA.out.results,
+        'salmonella'
+    )
 }
 
 // ── Completion summary ────────────────────────────────────────────────────────

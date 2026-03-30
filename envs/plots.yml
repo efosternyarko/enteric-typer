@@ -1,0 +1,12 @@
+name: enteric_plots
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.11
+  - matplotlib>=3.7
+  - seaborn>=0.12
+  - pandas>=1.5
+  - numpy>=1.24
+  - biopython>=1.81
