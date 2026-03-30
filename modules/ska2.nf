@@ -9,7 +9,7 @@ process SKA2_BUILD {
     label 'medium'
 
     conda     "${projectDir}/envs/ska2.yml"
-    container 'quay.io/biocontainers/ska2:0.3.4--h4ac6f70_0'
+    container 'quay.io/biocontainers/ska2:0.5.1--h4ac6f70_0'
 
     input:
     path(fastas)    // collected list of FASTA files

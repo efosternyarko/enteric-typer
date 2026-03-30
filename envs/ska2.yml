@@ -4,4 +4,4 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - ska2=0.3.4
+  - ska2=0.5.1
