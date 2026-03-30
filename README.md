@@ -236,7 +236,7 @@ nextflow run main.nf \
     -profile conda
 ```
 
-### From a samplesheet (CSV: id,fasta)
+### Or to use a samplesheet
 
 ```bash
 # Auto-generate samplesheet from a folder
