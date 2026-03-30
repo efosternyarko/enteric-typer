@@ -15,7 +15,7 @@
 #
 # Requirements:
 #   ncbi-datasets-cli  (mamba install -c conda-forge ncbi-datasets-cli)
-#   mash               (conda install -c bioconda mash)
+#   mash               (mamba install -c bioconda mash)
 #
 # Usage (run from the repo root):
 #   bash assets/build_references.sh
@@ -39,7 +39,7 @@ fi
 
 if ! command -v mash &>/dev/null; then
     echo "ERROR: 'mash' is not installed."
-    echo "Install with:  conda install -c bioconda mash"
+    echo "Install with:  mamba install -c bioconda mash"
     exit 1
 fi
 
