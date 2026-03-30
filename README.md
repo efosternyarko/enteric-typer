@@ -275,6 +275,7 @@ nextflow secrets set MICROREACT_TOKEN <your_microreact_token>
 
 ```bash
 # Run the workflow
+# Replace "My enteric outbreak" with a project name of your choice
 nextflow run main.nf \
     --input_dir            /path/to/assemblies/ \
     --outdir               results/ \
