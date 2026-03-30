@@ -220,7 +220,7 @@ results/
 | `pbs` | PBS/Torque HPC executor |
 | `test` | Quick test run (no uploads) |
 
-## HPC example (Monash M3 / MASSIVE)
+## HPC example
 
 ```bash
 nextflow run main.nf \
