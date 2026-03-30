@@ -6,7 +6,7 @@
 #
 # Reference genomes included:
 #   E. coli K-12 MG1655                  GCF_000005845.2
-#   E. coli O157:H7 EDL933               GCF_000006665.3
+#   E. coli O157:H7 EDL933               GCF_000006665.1
 #   Salmonella Typhimurium LT2           GCF_000006945.2
 #   Salmonella Typhi CT18                GCF_000195995.1
 #   Salmonella Enteritidis P125109       GCF_000009505.1
@@ -99,7 +99,7 @@ echo ""
 
 # E. coli references — prefix 'Ecoli_' → species_check maps to 'E_coli'
 download_genome GCF_000005845.2  "Ecoli_K12_MG1655"
-download_genome GCF_000006665.3  "Ecoli_O157H7_EDL933"
+download_genome GCF_000006665.1  "Ecoli_O157H7_EDL933"
 
 # Salmonella references — prefix 'Salmonella_' → 'Salmonella_enterica'
 download_genome GCF_000006945.2  "Salmonella_Typhimurium_LT2"
