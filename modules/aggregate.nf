@@ -18,6 +18,7 @@ process AGGREGATE {
     path(ktype_files)         // parse_kaptive output (E. coli only; empty list for Salmonella)
     val(pathogenwatch_tsv)    // path string or 'NO_FILE'
     path(st_complexes)
+    path(amrrules_tsv)        // AMRrules wildtype gene definitions for this species
     val(species_label)        // 'ecoli' or 'salmonella'
 
     output:
@@ -42,6 +43,7 @@ process AGGREGATE {
         \$KTYPE_ARG \\
         ${pw_arg} \\
         --st-complexes  ${st_complexes} \\
+        --amrrules      ${amrrules_tsv} \\
         --output        ${species_label}_typer_results.tsv
     """
 }

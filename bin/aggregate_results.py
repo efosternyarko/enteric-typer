@@ -3,6 +3,16 @@
 
 Supports two species modes (--species ecoli | salmonella).
 Missing data for any tool is represented as 'NA'.
+
+AMRrules integration
+--------------------
+When --amrrules is supplied, AMRFinder gene lists are split into:
+  amrfinder_acquired_genes   — genes NOT flagged as wildtype by AMRrules
+                               (these confer clinical resistance)
+  amrfinder_intrinsic_genes  — genes flagged as wildtype/intrinsic by AMRrules
+                               (present in most strains; do NOT confer resistance)
+  amrfinder_genes            — raw unfiltered list (all genes, for reference)
+  amrfinder_drug_classes     — drug classes from acquired genes only
 """
 
 from __future__ import annotations
@@ -11,6 +21,23 @@ import argparse
 import csv
 import os
 import sys
+
+
+# ── AMRrules loader ────────────────────────────────────────────────────────────
+
+def load_amrrules(path: str) -> frozenset[str]:
+    """Return set of gene symbols classified as wildtype (phenotype=wildtype)."""
+    if not _valid(path):
+        return frozenset()
+    genes: set[str] = set()
+    with open(path) as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        for row in reader:
+            if row.get("phenotype", "").strip().lower() == "wildtype":
+                gene = row.get("gene", "").strip()
+                if gene:
+                    genes.add(gene)
+    return frozenset(genes)
 
 
 # ── Loader helpers ─────────────────────────────────────────────────────────────
@@ -49,8 +76,54 @@ def load_st_complexes(path: str) -> dict[str, str]:
     return lookup
 
 
-def load_amrfinder(files: list[str]) -> dict[str, str]:
-    """Collapse per-row AMRFinder output to {sample: semicolon-list-of-gene-symbols}."""
+def load_amrfinder(files: list[str],
+                   wildtype_genes: frozenset[str] = frozenset()
+                   ) -> dict[str, dict[str, str]]:
+    """
+    Parse AMRFinder output.
+
+    Returns {sample: {
+        'all':       semicolon-list of all genes (raw),
+        'acquired':  semicolon-list of non-intrinsic genes,
+        'intrinsic': semicolon-list of AMRrules wildtype genes,
+    }}
+    """
+    raw: dict[str, dict[str, set]] = {}
+
+    for f in files:
+        if not _valid(f):
+            continue
+        with open(f) as fh:
+            reader = csv.DictReader(fh, delimiter="\t")
+            for row in reader:
+                sid  = (row.get("Name") or "").strip()
+                gene = (row.get("Gene symbol") or row.get("Element symbol") or "").strip()
+                if not sid or not gene:
+                    continue
+                d = raw.setdefault(sid, {"all": set(), "acquired": set(), "intrinsic": set()})
+                d["all"].add(gene)
+                if gene in wildtype_genes:
+                    d["intrinsic"].add(gene)
+                else:
+                    d["acquired"].add(gene)
+
+    return {
+        sid: {
+            "all":       ";".join(sorted(d["all"]))       if d["all"]       else "NA",
+            "acquired":  ";".join(sorted(d["acquired"]))  if d["acquired"]  else "NA",
+            "intrinsic": ";".join(sorted(d["intrinsic"])) if d["intrinsic"] else "NA",
+        }
+        for sid, d in raw.items()
+    }
+
+
+def load_amrfinder_classes(files: list[str],
+                            wildtype_genes: frozenset[str] = frozenset()
+                            ) -> dict[str, str]:
+    """
+    Collapse AMRFinder output to {sample: semicolon-list-of-unique-drug-classes}.
+    Only acquired (non-intrinsic) genes are counted.
+    """
     results: dict[str, set] = {}
     for f in files:
         if not _valid(f):
@@ -61,25 +134,9 @@ def load_amrfinder(files: list[str]) -> dict[str, str]:
                 sid  = (row.get("Name") or "").strip()
                 gene = (row.get("Gene symbol") or row.get("Element symbol") or "").strip()
                 cls  = (row.get("Class") or "").strip()
-                if sid and gene:
-                    results.setdefault(sid, set()).add(gene)
-    return {sid: ";".join(sorted(genes)) if genes else "NA"
-            for sid, genes in results.items()}
-
-
-def load_amrfinder_classes(files: list[str]) -> dict[str, str]:
-    """Collapse AMRFinder output to {sample: semicolon-list-of-unique-drug-classes}."""
-    results: dict[str, set] = {}
-    for f in files:
-        if not _valid(f):
-            continue
-        with open(f) as fh:
-            reader = csv.DictReader(fh, delimiter="\t")
-            for row in reader:
-                sid = (row.get("Name") or "").strip()
-                cls = (row.get("Class") or "").strip()
-                if sid and cls and cls not in ("NA", ""):
-                    results.setdefault(sid, set()).add(cls)
+                if sid and gene and cls and cls not in ("NA", ""):
+                    if gene not in wildtype_genes:   # acquired only
+                        results.setdefault(sid, set()).add(cls)
     return {sid: ";".join(sorted(classes)) if classes else "NA"
             for sid, classes in results.items()}
 
@@ -123,7 +180,7 @@ def load_ectyper(files: list[str]) -> dict[str, dict]:
 
 
 def load_sistr(files: list[str]) -> dict[str, dict]:
-    """Parse SISTR output → {sample: {sistr_serovar, sistr_O, sistr_H1, sistr_H2, sistr_cgmlst_ST}}."""
+    """Parse SISTR output → {sample: {sistr_serovar, ...}}."""
     results: dict[str, dict] = {}
     for f in files:
         if not _valid(f):
@@ -135,14 +192,14 @@ def load_sistr(files: list[str]) -> dict[str, dict]:
                 if not sid:
                     continue
                 results[sid] = {
-                    "sistr_serovar":       _na(row.get("serovar")),
+                    "sistr_serovar":         _na(row.get("serovar")),
                     "sistr_serovar_antigen": _na(row.get("serovar_antigen")),
-                    "sistr_serovar_cgmlst": _na(row.get("serovar_cgmlst")),
-                    "sistr_O":             _na(row.get("O_antigen")),
-                    "sistr_H1":            _na(row.get("H1")),
-                    "sistr_H2":            _na(row.get("H2")),
-                    "sistr_cgmlst_ST":     _na(row.get("cgmlst_ST")),
-                    "sistr_qc":            _na(row.get("qc_status")),
+                    "sistr_serovar_cgmlst":  _na(row.get("serovar_cgmlst")),
+                    "sistr_O":               _na(row.get("O_antigen")),
+                    "sistr_H1":              _na(row.get("H1")),
+                    "sistr_H2":              _na(row.get("H2")),
+                    "sistr_cgmlst_ST":       _na(row.get("cgmlst_ST")),
+                    "sistr_qc":              _na(row.get("qc_status")),
                 }
     return results
 
@@ -179,15 +236,14 @@ def load_pathogenwatch(path: str) -> dict[str, dict]:
             sid = (row.get("sample") or "").strip()
             if not sid:
                 continue
-            # Collect all cluster threshold columns dynamically
             cluster_cols = {k: v for k, v in row.items() if k.startswith("pw_cluster")}
             results[sid] = {
-                "pw_status":              _na(row.get("pw_status")),
-                "pw_species":             _na(row.get("pw_species")),
-                "pw_genome_uuid":         _na(row.get("pw_genome_uuid")),
-                "pw_collection_url":      _na(row.get("pw_collection_url")),
-                "pw_cgmlst_st":           _na(row.get("pw_cgmlst_st")),
-                "pw_tree_available":      _na(row.get("pw_tree_available")),
+                "pw_status":         _na(row.get("pw_status")),
+                "pw_species":        _na(row.get("pw_species")),
+                "pw_genome_uuid":    _na(row.get("pw_genome_uuid")),
+                "pw_collection_url": _na(row.get("pw_collection_url")),
+                "pw_cgmlst_st":      _na(row.get("pw_cgmlst_st")),
+                "pw_tree_available": _na(row.get("pw_tree_available")),
                 **cluster_cols,
             }
     return results
@@ -210,7 +266,10 @@ ECOLI_COLUMNS = [
     "mlst_scheme", "mlst_st", "mlst_st_complex",
     "ectyper_O", "ectyper_H", "ectyper_serotype", "ectyper_qc", "ectyper_evidence",
     "k_group", "k_locus", "k_type", "k_confidence",
-    "amrfinder_genes", "amrfinder_drug_classes",
+    "amrfinder_acquired_genes",
+    "amrfinder_intrinsic_genes",
+    "amrfinder_genes",
+    "amrfinder_drug_classes",
     "plasmidfinder_replicons",
     "pw_status", "pw_species", "pw_genome_uuid", "pw_collection_url",
     "pw_cgmlst_st",
@@ -226,7 +285,10 @@ SALMONELLA_COLUMNS = [
     "mlst_scheme", "mlst_st", "mlst_st_complex",
     "sistr_serovar", "sistr_serovar_antigen", "sistr_serovar_cgmlst",
     "sistr_O", "sistr_H1", "sistr_H2", "sistr_cgmlst_ST", "sistr_qc",
-    "amrfinder_genes", "amrfinder_drug_classes",
+    "amrfinder_acquired_genes",
+    "amrfinder_intrinsic_genes",
+    "amrfinder_genes",
+    "amrfinder_drug_classes",
     "plasmidfinder_replicons",
     "pw_status", "pw_species", "pw_genome_uuid", "pw_collection_url",
     "pw_cgmlst_st",
@@ -252,28 +314,38 @@ def main() -> None:
                         help="parse_kaptive output TSV files (E. coli only)")
     parser.add_argument("--pathogenwatch", default="NO_FILE")
     parser.add_argument("--st-complexes",  default=None)
+    parser.add_argument("--amrrules",      default=None,
+                        help="AMRrules TSV for this species (assets/amrrules/*.tsv)")
     parser.add_argument("--output",        required=True)
     args = parser.parse_args()
 
-    mlst_data       = load_mlst(args.mlst)
-    st_lookup       = load_st_complexes(args.st_complexes)
-    amr_genes       = load_amrfinder(args.amrfinder)
-    amr_classes     = load_amrfinder_classes(args.amrfinder)
-    plasmid_data    = load_plasmidfinder(args.plasmidfinder)
-    ktype_data      = load_ktype(args.ktype) if args.species == "ecoli" else {}
-    pw_data         = load_pathogenwatch(args.pathogenwatch)
+    # Load AMRrules wildtype gene set (empty frozenset if not provided)
+    wildtype_genes = load_amrrules(args.amrrules) if args.amrrules else frozenset()
+    if wildtype_genes:
+        print(f"INFO: AMRrules loaded — {len(wildtype_genes)} intrinsic gene(s) will be flagged: "
+              f"{', '.join(sorted(wildtype_genes))}", file=sys.stderr)
+    else:
+        print("INFO: No AMRrules file provided — amrfinder_intrinsic_genes will be NA for all samples.",
+              file=sys.stderr)
+
+    mlst_data    = load_mlst(args.mlst)
+    st_lookup    = load_st_complexes(args.st_complexes)
+    amr_data     = load_amrfinder(args.amrfinder, wildtype_genes)
+    amr_classes  = load_amrfinder_classes(args.amrfinder, wildtype_genes)
+    plasmid_data = load_plasmidfinder(args.plasmidfinder)
+    ktype_data   = load_ktype(args.ktype) if args.species == "ecoli" else {}
+    pw_data      = load_pathogenwatch(args.pathogenwatch)
 
     if args.species == "ecoli":
-        sero_data   = load_ectyper(args.serotyper)
-        columns     = ECOLI_COLUMNS
+        sero_data = load_ectyper(args.serotyper)
+        columns   = ECOLI_COLUMNS
     else:
-        sero_data   = load_sistr(args.serotyper)
-        columns     = SALMONELLA_COLUMNS
+        sero_data = load_sistr(args.serotyper)
+        columns   = SALMONELLA_COLUMNS
 
-    # Union of all sample IDs seen across any tool
     all_samples = sorted(set(
         list(mlst_data.keys()) +
-        list(amr_genes.keys()) +
+        list(amr_data.keys()) +
         list(sero_data.keys()) +
         list(plasmid_data.keys()) +
         list(ktype_data.keys()) +
@@ -283,13 +355,11 @@ def main() -> None:
     if not all_samples:
         print(f"WARNING: No samples found for {args.species}. Writing empty output.", file=sys.stderr)
 
-    # Gather all cluster columns seen in pathogenwatch data
     all_pw_cluster_cols: set[str] = set()
     for pw in pw_data.values():
         all_pw_cluster_cols.update(k for k in pw if k.startswith("pw_cluster"))
 
-    # Extend column list with any dynamic cluster columns not already listed
-    extra_cols = sorted(all_pw_cluster_cols - set(columns))
+    extra_cols   = sorted(all_pw_cluster_cols - set(columns))
     final_columns = columns + extra_cols
 
     with open(args.output, "w", newline="") as fh:
@@ -298,32 +368,33 @@ def main() -> None:
         writer.writeheader()
 
         for sid in all_samples:
-            ml = mlst_data.get(sid, {})
-            st = ml.get("mlst_st", "NA")
-            pw = pw_data.get(sid, {})
-            sr = sero_data.get(sid, {})
-            kt = ktype_data.get(sid, {})
+            ml  = mlst_data.get(sid, {})
+            st  = ml.get("mlst_st", "NA")
+            pw  = pw_data.get(sid, {})
+            sr  = sero_data.get(sid, {})
+            kt  = ktype_data.get(sid, {})
+            amr = amr_data.get(sid, {})
 
             row: dict = {
-                "sample":               sid,
-                "mlst_scheme":          ml.get("mlst_scheme",       "NA"),
-                "mlst_st":              st,
-                "mlst_st_complex":      st_lookup.get(st,           "NA"),
-                "amrfinder_genes":      amr_genes.get(sid,          "NA"),
-                "amrfinder_drug_classes": amr_classes.get(sid,      "NA"),
-                "plasmidfinder_replicons": plasmid_data.get(sid,    "NA"),
-                "pw_status":            pw.get("pw_status",         "NA"),
-                "pw_species":           pw.get("pw_species",        "NA"),
-                "pw_genome_uuid":       pw.get("pw_genome_uuid",    "NA"),
-                "pw_collection_url":    pw.get("pw_collection_url", "NA"),
-                "pw_cgmlst_st":         pw.get("pw_cgmlst_st",      "NA"),
-                "pw_tree_available":    pw.get("pw_tree_available",  "False"),
+                "sample":                   sid,
+                "mlst_scheme":              ml.get("mlst_scheme",       "NA"),
+                "mlst_st":                  st,
+                "mlst_st_complex":          st_lookup.get(st,           "NA"),
+                "amrfinder_acquired_genes": amr.get("acquired",         "NA"),
+                "amrfinder_intrinsic_genes":amr.get("intrinsic",        "NA"),
+                "amrfinder_genes":          amr.get("all",              "NA"),
+                "amrfinder_drug_classes":   amr_classes.get(sid,        "NA"),
+                "plasmidfinder_replicons":  plasmid_data.get(sid,       "NA"),
+                "pw_status":               pw.get("pw_status",          "NA"),
+                "pw_species":              pw.get("pw_species",         "NA"),
+                "pw_genome_uuid":          pw.get("pw_genome_uuid",     "NA"),
+                "pw_collection_url":       pw.get("pw_collection_url",  "NA"),
+                "pw_cgmlst_st":            pw.get("pw_cgmlst_st",       "NA"),
+                "pw_tree_available":       pw.get("pw_tree_available",  "False"),
             }
-            # Add cluster columns from pathogenwatch
             for col in all_pw_cluster_cols:
                 row[col] = pw.get(col, "NA")
 
-            # K-type columns (E. coli only)
             if args.species == "ecoli":
                 row.update({
                     "k_group":      kt.get("k_group",      "NA"),
@@ -331,9 +402,6 @@ def main() -> None:
                     "k_type":       kt.get("k_type",       "NA"),
                     "k_confidence": kt.get("k_confidence", "NA"),
                 })
-
-            # Species-specific serotyping columns
-            if args.species == "ecoli":
                 row.update({
                     "ectyper_O":        sr.get("ectyper_O",        "NA"),
                     "ectyper_H":        sr.get("ectyper_H",        "NA"),
@@ -343,14 +411,14 @@ def main() -> None:
                 })
             else:
                 row.update({
-                    "sistr_serovar":          sr.get("sistr_serovar",          "NA"),
-                    "sistr_serovar_antigen":  sr.get("sistr_serovar_antigen",  "NA"),
-                    "sistr_serovar_cgmlst":   sr.get("sistr_serovar_cgmlst",   "NA"),
-                    "sistr_O":                sr.get("sistr_O",                "NA"),
-                    "sistr_H1":               sr.get("sistr_H1",               "NA"),
-                    "sistr_H2":               sr.get("sistr_H2",               "NA"),
-                    "sistr_cgmlst_ST":        sr.get("sistr_cgmlst_ST",        "NA"),
-                    "sistr_qc":               sr.get("sistr_qc",               "NA"),
+                    "sistr_serovar":         sr.get("sistr_serovar",         "NA"),
+                    "sistr_serovar_antigen": sr.get("sistr_serovar_antigen", "NA"),
+                    "sistr_serovar_cgmlst":  sr.get("sistr_serovar_cgmlst",  "NA"),
+                    "sistr_O":               sr.get("sistr_O",               "NA"),
+                    "sistr_H1":              sr.get("sistr_H1",              "NA"),
+                    "sistr_H2":              sr.get("sistr_H2",              "NA"),
+                    "sistr_cgmlst_ST":       sr.get("sistr_cgmlst_ST",       "NA"),
+                    "sistr_qc":              sr.get("sistr_qc",              "NA"),
                 })
 
             writer.writerow(row)

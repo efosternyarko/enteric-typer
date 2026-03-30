@@ -68,14 +68,6 @@ ST_PHYLOGROUP: dict[str, str] = {
     "ST636":"A",  "ST648":"F",  "ST1193":"B2",
 }
 
-# AMRrules wildtype/intrinsic genes to exclude from gene prevalence plots
-# Source: AMRverse/AMRrules Escherichia_coli.tsv (phenotype=wildtype)
-# These are intrinsic chromosomal genes whose presence does not indicate acquired resistance.
-AMRRULES_WILDTYPE_GENES: frozenset[str] = frozenset({
-    "blaEC", "blaEC-4", "blaEC-13", "blaEC-15", "blaEC-16", "blaEC-18", "blaEC-19",
-    "pmrB", "glpT", "mdfA",
-})
-
 # Clinically relevant AMR classes to show (exclude EFFLUX/MULTIDRUG from heatmap)
 CLINICAL_CLASSES = [
     "BETA-LACTAM", "AMINOGLYCOSIDE", "SULFONAMIDE", "TRIMETHOPRIM",
@@ -245,7 +237,8 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
 
 
 def _panel_amr(df: pd.DataFrame, ax: plt.Axes) -> None:
-    col = next((c for c in ["amr_classes", "amrfinderplus_amr_classes"] if c in df.columns), None)
+    col = next((c for c in ["amrfinder_drug_classes", "amr_classes",
+                            "amrfinderplus_amr_classes"] if c in df.columns), None)
     if col is None:
         ax.text(0.5, 0.5, "No AMR data", ha="center", va="center",
                 transform=ax.transAxes, color="grey")
@@ -277,7 +270,8 @@ def _panel_amr(df: pd.DataFrame, ax: plt.Axes) -> None:
 
 
 def _panel_mdr(df: pd.DataFrame, ax: plt.Axes) -> None:
-    col = next((c for c in ["amr_classes", "amrfinderplus_amr_classes"] if c in df.columns), None)
+    col = next((c for c in ["amrfinder_drug_classes", "amr_classes",
+                            "amrfinderplus_amr_classes"] if c in df.columns), None)
     if col is None:
         ax.set_title("D   MDR burden"); return
 
@@ -306,7 +300,8 @@ def _panel_mdr(df: pd.DataFrame, ax: plt.Axes) -> None:
 # ── Figure 2: Resistome heatmap ───────────────────────────────────────────────
 
 def fig_resistome_heatmap(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
-    col = next((c for c in ["amr_classes", "amrfinderplus_amr_classes"] if c in df.columns), None)
+    col = next((c for c in ["amrfinder_drug_classes", "amr_classes",
+                            "amrfinderplus_amr_classes"] if c in df.columns), None)
     if col is None:
         print("WARNING: no AMR class column — skipping heatmap", file=sys.stderr)
         return
@@ -382,7 +377,10 @@ def fig_resistome_heatmap(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
 # ── Figure 3: AMR genes ───────────────────────────────────────────────────────
 
 def fig_amr_genes(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int = 25) -> None:
-    col = next((c for c in ["amr_genes", "amrfinderplus_amr_core_genes"] if c in df.columns), None)
+    # Prefer amrfinder_acquired_genes (intrinsic already excluded upstream by AMRrules);
+    # fall back to amr_genes / theiaprok column if running on pre-AMRrules data
+    col = next((c for c in ["amrfinder_acquired_genes", "amr_genes",
+                             "amrfinderplus_amr_core_genes"] if c in df.columns), None)
     if col is None:
         print("WARNING: no AMR gene column — skipping gene plot", file=sys.stderr)
         return
@@ -390,8 +388,7 @@ def fig_amr_genes(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int = 25) 
     gene_ctr: Counter = Counter()
     for val in df[col]:
         for g in parse_list(val):
-            if g not in AMRRULES_WILDTYPE_GENES:
-                gene_ctr[g] += 1
+            gene_ctr[g] += 1
 
     top    = gene_ctr.most_common(top_n)
     labels = [g for g, _ in top]

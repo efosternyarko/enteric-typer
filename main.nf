@@ -212,6 +212,7 @@ workflow {
         ch_ecoli_ktype,
         ch_pw_ecoli_out,
         file("${projectDir}/assets/ecoli_st_complexes.tsv"),
+        file("${projectDir}/assets/amrrules/Escherichia_coli.tsv"),
         'ecoli'
     )
 
@@ -223,6 +224,7 @@ workflow {
         [],   // no K-typing for Salmonella
         ch_pw_salmonella_out,
         file("${projectDir}/assets/salmonella_st_complexes.tsv"),
+        file("${projectDir}/assets/amrrules/Salmonella_enterica.tsv"),
         'salmonella'
     )
 
