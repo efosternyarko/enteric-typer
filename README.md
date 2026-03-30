@@ -372,6 +372,23 @@ results/
 
 ---
 
+## Optional: install Graphviz
+
+Nextflow generates an execution DAG diagram (`pipeline_info/dag.svg`) which
+requires Graphviz to render. Without it you will see a harmless warning — the
+pipeline still runs fine. To suppress the warning:
+
+```bash
+# macOS
+brew install graphviz
+
+# Linux
+sudo apt install graphviz
+
+# conda
+conda install -c conda-forge graphviz
+```
+
 ## Execution profiles
 
 | Profile | Use case |

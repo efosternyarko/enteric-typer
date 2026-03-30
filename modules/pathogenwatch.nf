@@ -29,7 +29,9 @@ process PATHOGENWATCH {
     path "pathogenwatch_tree.nwk",                                   emit: tree, optional: true
 
     script:
-    def rows = samples.collect { id, fasta -> "${id},${fasta}" }.join('\n')
+    // .collect() on a tuple channel produces a flat list [id1,fasta1,id2,fasta2,...]
+    // .collate(2) re-pairs them into [[id1,fasta1],[id2,fasta2],...]
+    def rows = samples.collate(2).collect { pair -> "${pair[0]},${pair[1]}" }.join('\n')
     def thresholds = params.pathogenwatch_cluster_thresholds ?: '5,10,20,50'
     """
     # Write samplesheet for pathogenwatch_client.py
