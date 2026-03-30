@@ -201,12 +201,13 @@ Restart PowerShell.
 
 ---
 
-### Step 5 — Install ncbi-datasets-cli
+### Step 5 — Install ncbi-datasets-cli and mash
 
-Required by `build_references.sh` to download reference genomes from NCBI:
+Both are required by `build_references.sh` to download reference genomes and build the species sketch:
 
 ```bash
 mamba install -c conda-forge ncbi-datasets-cli
+mamba install -c bioconda mash
 ```
 
 ---
