@@ -128,14 +128,27 @@ curl -s https://get.nextflow.io | bash
 The installer creates a `nextflow` executable in the current directory. Move it
 somewhere on your `$PATH` so it can be run from anywhere:
 
-**macOS/Linux**
+**macOS**
+```bash
+# If Homebrew is installed, move to the Homebrew bin (already in $PATH):
+mv nextflow /opt/homebrew/bin/        # Apple Silicon (M1/M2/M3)
+# or
+mv nextflow /usr/local/bin/           # Intel Mac
+
+# If Homebrew is not installed, create ~/bin and add it to your PATH:
+mkdir -p ~/bin
+mv nextflow ~/bin/
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**Linux**
 ```bash
 mv nextflow ~/bin/
 # If ~/bin/ does not exist yet:
 mkdir -p ~/bin
-echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc   # zsh (default on macOS)
-# or ~/.bashrc for bash
-source ~/.zshrc
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
 **Windows (PowerShell)**
