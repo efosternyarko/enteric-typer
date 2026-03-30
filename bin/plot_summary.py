@@ -68,6 +68,14 @@ ST_PHYLOGROUP: dict[str, str] = {
     "ST636":"A",  "ST648":"F",  "ST1193":"B2",
 }
 
+# AMRrules wildtype/intrinsic genes to exclude from gene prevalence plots
+# Source: AMRverse/AMRrules Escherichia_coli.tsv (phenotype=wildtype)
+# These are intrinsic chromosomal genes whose presence does not indicate acquired resistance.
+AMRRULES_WILDTYPE_GENES: frozenset[str] = frozenset({
+    "blaEC", "blaEC-4", "blaEC-13", "blaEC-15", "blaEC-16", "blaEC-18", "blaEC-19",
+    "pmrB", "glpT", "mdfA",
+})
+
 # Clinically relevant AMR classes to show (exclude EFFLUX/MULTIDRUG from heatmap)
 CLINICAL_CLASSES = [
     "BETA-LACTAM", "AMINOGLYCOSIDE", "SULFONAMIDE", "TRIMETHOPRIM",
@@ -204,7 +212,7 @@ def _panel_st(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
         seen.setdefault(pg, _col(lbl))
     patches = [mpatches.Patch(facecolor=c, label=pg) for pg, c in seen.items()]
     ax.legend(handles=patches, title="Phylogroup", fontsize=7, title_fontsize=7,
-              loc="lower right", handlelength=1)
+              loc="upper right", handlelength=1)
 
 
 def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
@@ -345,10 +353,11 @@ def fig_resistome_heatmap(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     ax_heat.set_title("Resistome — AMR drug class presence/absence  (ordered by ST)",
                       fontsize=10, fontweight="bold", pad=8)
 
-    # ST colour bar
-    st_palette = {st: PHYLOGROUP_COLORS.get(get_phylogroup(st), PHYLOGROUP_COLORS["Unknown"])
-                  for st in df2["_st"].unique()}
-    st_palette["Unknown"] = PHYLOGROUP_COLORS["Unknown"]
+    # ST colour bar — unique color per ST so no two STs share a color
+    _unique_sts = [s for s in dict.fromkeys(df2["_st"]) if s != "Unknown"]
+    _rgb = sns.color_palette("husl", max(len(_unique_sts), 1))
+    st_palette: dict[str, tuple] = {st: _rgb[i] for i, st in enumerate(_unique_sts)}
+    st_palette["Unknown"] = (0.85, 0.85, 0.85)
 
     for i, st in enumerate(df2["_st"]):
         ax_st.barh(i, 1, color=st_palette[st], height=1, linewidth=0, align="edge")
@@ -381,7 +390,8 @@ def fig_amr_genes(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int = 25) 
     gene_ctr: Counter = Counter()
     for val in df[col]:
         for g in parse_list(val):
-            gene_ctr[g] += 1
+            if g not in AMRRULES_WILDTYPE_GENES:
+                gene_ctr[g] += 1
 
     top    = gene_ctr.most_common(top_n)
     labels = [g for g, _ in top]
