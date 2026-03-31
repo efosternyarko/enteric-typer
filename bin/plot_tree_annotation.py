@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-plot_tree_annotation.py — Phylogenetic tree annotated with AMR resistance profile.
+plot_tree_annotation.py — Phylogenetic tree annotated with virulence & AMR profiles.
 
 Reads:
   --tree      Newick tree file (IQ-TREE .treefile)
@@ -10,18 +10,21 @@ Reads:
   --species   ecoli | salmonella
 
 Produces (PDF + PNG at 300 dpi):
-  {prefix}_{species}_tree_amr.pdf / .png
+  {prefix}_tree_amr.pdf / .png
 
 Layout (left → right):
-  Phylogenetic tree  |  Phylogroup strip  |  AMR drug class heatmap
+  Phylogenetic tree  |  Phylogroup strip  |  Virulence heatmap  |  AMR genes heatmap (grouped by class)
 """
 
 from __future__ import annotations
+from typing import Optional
 
 import argparse
 import math
 import sys
 from pathlib import Path
+
+from collections import Counter, defaultdict
 
 import matplotlib
 matplotlib.use("Agg")
@@ -136,16 +139,28 @@ def _draw_tree(ax: plt.Axes, root, pos: dict) -> None:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+_SENTINEL = {"", "-", "NA", "nan", "None", "none"}
+
 def _parse_classes(val) -> set[str]:
-    if pd.isna(val) or not str(val).strip():
+    """Parse a ';' or ','-separated drug-class string into a set of class names."""
+    if pd.isna(val) or str(val).strip() in _SENTINEL:
         return set()
     out: set[str] = set()
-    for tok in str(val).split(","):
+    # aggregate_results.py writes ';'-separated lists; tolerate ',' too
+    for tok in str(val).replace(";", ",").split(","):
         for part in tok.strip().split("/"):
             p = part.strip()
-            if p:
+            if p and p not in _SENTINEL:
                 out.add(p)
     return out
+
+
+def _parse_genes(val) -> list[str]:
+    """Parse a ';'-separated gene list, filtering sentinel values."""
+    if pd.isna(val) or str(val).strip() in _SENTINEL:
+        return []
+    return [g.strip() for g in str(val).split(";")
+            if g.strip() and g.strip() not in _SENTINEL]
 
 
 def _clean_st(raw) -> str:
@@ -206,71 +221,160 @@ def plot_tree_amr(
         print(f"INFO: {n - len(matched)} tree tip(s) have no metadata — shown as Unknown/absent.",
               file=sys.stderr)
 
-    # ── Determine AMR column ──────────────────────────────────────────────────
-    amr_col = next(
-        (c for c in ("amrfinder_drug_classes", "amr_classes", "amrfinderplus_amr_classes")
-         if c in meta.columns),
-        None
-    )
+    # ── Phylogroup per tip ────────────────────────────────────────────────────
+    # Prefer kleborate_phylogroup directly; fall back to ST-lookup
+    def _tip_phylogroup(tip: str) -> str:
+        if tip not in meta.index:
+            return "Unknown"
+        if "kleborate_phylogroup" in meta.columns:
+            pg = str(meta.loc[tip, "kleborate_phylogroup"]).strip()
+            if pg not in _SENTINEL and pg not in {"NA", "nan", "None"}:
+                return pg
+        if "mlst_st" in meta.columns:
+            st = _clean_st(meta.loc[tip, "mlst_st"])
+            return ST_PHYLOGROUP.get(st, "Unknown")
+        return "Unknown"
 
-    # Order classes by descending prevalence; skip absent classes
-    if amr_col:
-        class_counts = {
-            cls: sum(1 for v in meta[amr_col] if cls in _parse_classes(v))
-            for cls in CLINICAL_CLASSES
-        }
-        classes_ordered = [c for c in CLINICAL_CLASSES
-                           if class_counts.get(c, 0) > 0]
-        classes_ordered.sort(key=lambda c: -class_counts[c])
+    # ── AMR genes: parse class info and build class-grouped column order ──────
+    gene_col = next((c for c in ("amrfinder_acquired_genes", "amrfinder_genes")
+                     if c in meta.columns), None)
+    gc_col   = "amrfinder_gene_classes"   # gene=CLASS;... format
+
+    gene_cls_map: dict[str, str] = {}
+    if gc_col in meta.columns:
+        for val in meta[gc_col]:
+            s = str(val).strip()
+            if s in _SENTINEL:
+                continue
+            for pair in s.split(";"):
+                pair = pair.strip()
+                if "=" in pair:
+                    g, c = pair.split("=", 1)
+                    gene_cls_map[g.strip()] = c.strip().upper()
+
+    gene_freq: Counter = Counter()
+    if gene_col:
+        for v in meta[gene_col]:
+            gene_freq.update(_parse_genes(v))
+
+    MAX_GENES = 20
+    raw_top_genes = [g for g, _ in gene_freq.most_common(MAX_GENES) if gene_freq[g] > 0]
+
+    # Group genes by drug class; order classes by total prevalence
+    class_genes_map: dict[str, list[str]] = defaultdict(list)
+    for g in raw_top_genes:
+        class_genes_map[gene_cls_map.get(g, "OTHER")].append(g)
+    cls_prev = {cls: sum(gene_freq[g] for g in gs) for cls, gs in class_genes_map.items()}
+    sorted_cls = sorted(class_genes_map, key=lambda c: -cls_prev[c])
+    top_genes   = [g for cls in sorted_cls for g in class_genes_map[cls]]
+    gene_to_cls = [gene_cls_map.get(g, "OTHER") for g in top_genes]
+    n_genes = len(top_genes)
+
+    # ── Virulence panel ───────────────────────────────────────────────────────
+    KLEBORATE_VIR = [
+        ("kleborate_Stx1",     "Stx1"),
+        ("kleborate_Stx2",     "Stx2"),
+        ("kleborate_eae",      "eae"),
+        ("kleborate_ipaH",     "ipaH"),
+        ("kleborate_LT",       "LT"),
+        ("kleborate_ST_toxin", "ST-toxin"),
+    ]
+    vir_labels:  list[str]   = []
+    vir_sources: list[tuple] = []   # ("kleb", col) or ("gene", gene_name, vir_gene_col)
+
+    vir_gene_col = None
+    if species == "ecoli":
+        tip_set = set(tips)
+        for col, label in KLEBORATE_VIR:
+            if col in meta.columns:
+                present = any(
+                    str(meta.loc[t, col]).strip() not in {"-", "NA", "nan", "None", ""}
+                    for t in tip_set if t in meta.index
+                )
+                if present:
+                    vir_labels.append(label)
+                    vir_sources.append(("kleb", col))
+        if "amrfinder_virulence_genes" in meta.columns:
+            vir_gene_col = "amrfinder_virulence_genes"
     else:
-        class_counts   = {}
-        classes_ordered = []
+        vir_gene_col = next((c for c in ("amrfinder_virulence_genes", "abricate_vfdb_genes")
+                             if c in meta.columns), None)
 
-    n_cls = len(classes_ordered)
+    MAX_VIR_GENES = 12
+    vir_gene_freq: Counter = Counter()
+    top_vir_genes: list[str] = []
+    if vir_gene_col:
+        for v in meta[vir_gene_col]:
+            vir_gene_freq.update(_parse_genes(v))
+        top_vir_genes = [g for g, _ in vir_gene_freq.most_common(MAX_VIR_GENES)
+                         if vir_gene_freq[g] > 0]
+        for g in top_vir_genes:
+            vir_labels.append(g)
+            vir_sources.append(("gene", g, vir_gene_col))
 
-    # ── Build binary AMR matrix (rows = tips in tree order) ───────────────────
-    mat = np.zeros((n, max(n_cls, 1)), dtype=np.uint8)
-    if amr_col and n_cls:
+    n_vir = len(vir_labels)
+
+    # ── Build binary matrices ─────────────────────────────────────────────────
+    mat_gene = np.zeros((n, max(n_genes, 1)), dtype=np.uint8)
+    if gene_col and n_genes:
         for i, tip in enumerate(tips):
             if tip in meta.index:
-                row_cls = _parse_classes(meta.loc[tip, amr_col])
-                for j, cls in enumerate(classes_ordered):
-                    mat[i, j] = 1 if cls in row_cls else 0
+                row_genes = set(_parse_genes(meta.loc[tip, gene_col]))
+                for j, g in enumerate(top_genes):
+                    mat_gene[i, j] = 1 if g in row_genes else 0
+
+    mat_vir = np.zeros((n, max(n_vir, 1)), dtype=np.uint8)
+    if n_vir:
+        for i, tip in enumerate(tips):
+            if tip not in meta.index:
+                continue
+            for j, src in enumerate(vir_sources):
+                if src[0] == "kleb":
+                    val = str(meta.loc[tip, src[1]]).strip()
+                    mat_vir[i, j] = 0 if val in {"-", "NA", "nan", "None", ""} else 1
+                else:  # "gene"
+                    vcol = src[2]
+                    row_vg = set(_parse_genes(meta.loc[tip, vcol]))
+                    mat_vir[i, j] = 1 if src[1] in row_vg else 0
 
     # ── Figure geometry ───────────────────────────────────────────────────────
     row_h   = max(0.05, min(0.18, 10.0 / n))
-    fig_h   = max(5.0, n * row_h + 2.8)
+    fig_h   = max(5.0, n * row_h + 3.5)   # extra bottom margin for class sub-labels
     tree_w  = 4.5
     strip_w = 0.35
-    heat_w  = max(1.5, n_cls * 0.50) if n_cls else 0
+    vir_w   = max(1.5, n_vir   * 0.45) if n_vir   else 0
+    gene_w  = max(2.0, n_genes * 0.35) if n_genes else 0
 
     col_ratios = [tree_w, strip_w]
     n_axes = 2
-    if n_cls:
-        col_ratios.append(heat_w)
-        n_axes = 3
+    if n_vir:
+        col_ratios.append(vir_w);  n_axes += 1
+    if n_genes:
+        col_ratios.append(gene_w); n_axes += 1
 
     fig, axes = plt.subplots(
         1, n_axes,
         figsize=(sum(col_ratios) + 1.2, fig_h),
-        gridspec_kw={"width_ratios": col_ratios, "wspace": 0.025},
+        gridspec_kw={"width_ratios": col_ratios, "wspace": 0.03},
     )
+    axes    = list(axes) if n_axes > 1 else [axes]
     ax_tree = axes[0]
     ax_pg   = axes[1]
-    ax_heat = axes[2] if n_cls else None
+    _aidx   = 2
+    ax_vir  = axes[_aidx] if n_vir   else None; _aidx += (1 if n_vir   else 0)
+    ax_gene = axes[_aidx] if n_genes else None
 
     # ── Draw tree ─────────────────────────────────────────────────────────────
     _draw_tree(ax_tree, tree.root, pos)
 
     max_x = max(x for x, _ in pos.values())
-    ax_tree.set_ylim(n - 0.5, -0.5)   # inverted: tip 0 at top
+    ax_tree.set_ylim(n - 0.5, -0.5)
     ax_tree.set_yticks([])
     ax_tree.set_xlabel("Substitutions / site", fontsize=8)
     ax_tree.spines["left"].set_visible(False)
     ax_tree.spines["top"].set_visible(False)
     ax_tree.spines["right"].set_visible(False)
 
-    # Tip labels (show when ≤ 60 isolates)
     if n <= 60:
         x_label = max_x * 1.04
         for i, tip in enumerate(tips):
@@ -280,18 +384,21 @@ def plot_tree_amr(
     else:
         ax_tree.set_xlim(-max_x * 0.02, max_x * 1.05)
 
-    # Scale bar
-    sb = _scale_bar_value(max_x)
-    y_sb = n - 0.3
+    # Scale bar — bottom-left, text drawn above the bar in data coords
+    # (inverted y-axis: smaller y = higher on screen)
+    sb   = _scale_bar_value(max_x)
+    y_sb = n - 2.5   # well above the very bottom tip; leaves room for x-axis label
     ax_tree.plot([0, sb], [y_sb, y_sb], color="#333333", lw=1.2, clip_on=False)
-    ax_tree.text(sb / 2, y_sb + 0.55, f"{sb:.3g}",
-                 ha="center", va="top", fontsize=6.5)
+    ax_tree.text(0, y_sb - 0.5, f"{sb:.3g}",
+                 ha="left", va="bottom", fontsize=6.5)
 
     # ── Phylogroup strip ──────────────────────────────────────────────────────
+    seen_pgs: set[str] = set()
     for i, tip in enumerate(tips):
-        st  = _clean_st(meta.loc[tip, "mlst_st"]) if tip in meta.index and "mlst_st" in meta.columns else "Unknown"
-        col = _phylogroup_color(st)
+        pg  = _tip_phylogroup(tip)
+        col = PHYLOGROUP_COLORS.get(pg, PHYLOGROUP_COLORS["Unknown"])
         ax_pg.barh(i, 1, color=col, height=1.0, linewidth=0, align="center")
+        seen_pgs.add(pg)
 
     ax_pg.set_xlim(0, 1)
     ax_pg.set_ylim(n - 0.5, -0.5)
@@ -301,64 +408,134 @@ def plot_tree_amr(
     for sp in ax_pg.spines.values():
         sp.set_visible(False)
 
-    # ── AMR heatmap ───────────────────────────────────────────────────────────
-    if ax_heat is not None and n_cls:
-        cmap = mcolors.ListedColormap(["#f5f5f5", "#c0392b"])
-        ax_heat.imshow(mat, aspect="auto", cmap=cmap, vmin=0, vmax=1,
+    # ── Virulence heatmap ─────────────────────────────────────────────────────
+    # Teal/green palette — distinct from the AMR red
+    cmap_vir = mcolors.ListedColormap(["#f5f5f5", "#2a9d8f"])
+    cmap_amr = mcolors.ListedColormap(["#f5f5f5", "#c0392b"])
+
+    if ax_vir is not None and n_vir:
+        ax_vir.imshow(mat_vir, aspect="auto", cmap=cmap_vir, vmin=0, vmax=1,
+                      interpolation="nearest", origin="upper")
+
+        # Build prevalence-annotated labels consistent with AMR genes panel
+        vir_pct_labels = []
+        for label, src in zip(vir_labels, vir_sources):
+            if src[0] == "kleb":
+                col = src[1]
+                pct = 100 * sum(
+                    1 for t in tips if t in meta.index and
+                    str(meta.loc[t, col]).strip() not in {"-", "NA", "nan", "None", ""}
+                ) / n
+            else:
+                pct = 100 * int(vir_gene_freq.get(src[1], 0)) / n
+            vir_pct_labels.append(f"{label}\n({pct:.0f}%)")
+
+        ax_vir.set_xticks(np.arange(n_vir))
+        ax_vir.set_xticklabels(vir_pct_labels, rotation=40, ha="right", fontsize=7,
+                                fontstyle="italic")
+        ax_vir.set_yticks([])
+        vir_title = ("Virulence genes" if species == "ecoli"
+                     else "Virulence genes (VFDB)")
+        ax_vir.set_title(vir_title, fontsize=8, fontweight="bold", pad=3)
+        for sp in ax_vir.spines.values():
+            sp.set_visible(False)
+        # (virulence legend consolidated into tree-panel legend below)
+
+    # ── AMR genes heatmap (columns grouped by drug class) ─────────────────────
+    if ax_gene is not None and n_genes:
+        ax_gene.imshow(mat_gene, aspect="auto", cmap=cmap_amr, vmin=0, vmax=1,
                        interpolation="nearest", origin="upper")
 
-        col_labels = [
-            f"{CLASS_LABEL.get(c, c)}\n({100 * class_counts[c] / n:.0f}%)"
-            for c in classes_ordered
+        gene_pct_labels = [
+            f"{g}\n({100 * int(gene_freq[g]) / n:.0f}%)"
+            for g in top_genes
         ]
-        ax_heat.set_xticks(np.arange(n_cls))
-        ax_heat.set_xticklabels(col_labels, rotation=40, ha="right", fontsize=7.5)
-        ax_heat.set_yticks([])
-        ax_heat.set_title("AMR drug class", fontsize=8, fontweight="bold", pad=3)
-        for sp in ax_heat.spines.values():
+        ax_gene.set_xticks(np.arange(n_genes))
+        ax_gene.set_xticklabels(gene_pct_labels, rotation=40, ha="right",
+                                 fontsize=6.5, fontstyle="italic")
+        ax_gene.set_yticks([])
+        ax_gene.set_title("Acquired AMR genes", fontsize=8, fontweight="bold", pad=3)
+        for sp in ax_gene.spines.values():
             sp.set_visible(False)
 
-        # Colour legend for absent / present
-        ax_heat.legend(
-            handles=[
-                mpatches.Patch(facecolor="#c0392b", label="Resistant"),
-                mpatches.Patch(facecolor="#f5f5f5", edgecolor="#cccccc",
-                               linewidth=0.5, label="Susceptible / absent"),
-            ],
-            fontsize=7, loc="upper right",
-            bbox_to_anchor=(1.0, -0.18),
-            frameon=True, framealpha=0.9, edgecolor="none",
+        # Drug-class sub-labels below the gene tick labels
+        if gene_to_cls:
+            trans = ax_gene.get_xaxis_transform()
+            cls_spans: list[tuple[str, int, int]] = []
+            prev_cls, span_start = None, 0
+            for j, cls in enumerate(gene_to_cls):
+                if cls != prev_cls:
+                    if prev_cls is not None:
+                        cls_spans.append((prev_cls, span_start, j - 1))
+                    span_start, prev_cls = j, cls
+            if prev_cls is not None:
+                cls_spans.append((prev_cls, span_start, len(gene_to_cls) - 1))
+
+            for cls_name, j0, j1 in cls_spans:
+                x_mid = (j0 + j1) / 2.0
+                label = CLASS_LABEL.get(cls_name, cls_name.capitalize())
+                # Bracket line spanning the class columns — placed close under gene labels
+                ax_gene.plot([j0 - 0.4, j1 + 0.4], [-0.12, -0.12],
+                             transform=trans, color="#555555", lw=0.9, clip_on=False)
+                # Label rotated 40° to match gene tick labels
+                ax_gene.text(x_mid, -0.14, label,
+                             transform=trans, ha="right", va="top",
+                             fontsize=6.5, fontweight="bold", color="#333333",
+                             rotation=40, rotation_mode="anchor")
+
+        # (AMR genes legend consolidated into tree-panel legend below)
+
+    # ── Consolidated legend — bottom-left of tree panel, below scale bar ─────
+    # Order: Phylogroup swatches, then Virulence present/absent, then AMR present/absent
+    legend_handles: list[mpatches.Patch] = []
+
+    # Section 1: Phylogroup
+    pg_title_patch = mpatches.Patch(color="none", label="Phylogroup")
+    legend_handles.append(pg_title_patch)
+    for pg in sorted(seen_pgs):
+        legend_handles.append(
+            mpatches.Patch(facecolor=PHYLOGROUP_COLORS.get(pg, "#bab0ac"),
+                           label=f"  {pg}")
         )
 
-    # ── Phylogroup legend on tree panel ───────────────────────────────────────
-    seen_pgs: set[str] = set()
-    for tip in tips:
-        if tip in meta.index and "mlst_st" in meta.columns:
-            st = _clean_st(meta.loc[tip, "mlst_st"])
-        else:
-            st = "Unknown"
-        seen_pgs.add(ST_PHYLOGROUP.get(st, "Unknown"))
+    # Section 2: Virulence genes (only if panel exists)
+    if n_vir:
+        legend_handles.append(mpatches.Patch(color="none", label="Virulence genes"))
+        legend_handles.append(
+            mpatches.Patch(facecolor="#2a9d8f", label="  Present"))
+        legend_handles.append(
+            mpatches.Patch(facecolor="#f5f5f5", edgecolor="#cccccc",
+                           linewidth=0.5, label="  Absent"))
 
-    pg_patches = [
-        mpatches.Patch(facecolor=PHYLOGROUP_COLORS.get(pg, "#bab0ac"), label=f"Phylogroup {pg}")
-        for pg in sorted(seen_pgs)
-    ]
+    # Section 3: AMR genes (only if panel exists)
+    if n_genes:
+        legend_handles.append(mpatches.Patch(color="none", label="AMR genes"))
+        legend_handles.append(
+            mpatches.Patch(facecolor="#c0392b", label="  Present"))
+        legend_handles.append(
+            mpatches.Patch(facecolor="#f5f5f5", edgecolor="#cccccc",
+                           linewidth=0.5, label="  Absent"))
+
     ax_tree.legend(
-        handles=pg_patches, fontsize=6.5, title_fontsize=7,
-        loc="lower right", handlelength=1,
-        frameon=True, framealpha=0.85, edgecolor="none",
+        handles=legend_handles,
+        fontsize=6.5,
+        loc="lower left",
+        bbox_to_anchor=(0.0, -0.18),
+        handlelength=1,
+        frameon=True, framealpha=0.88, edgecolor="none",
+        labelspacing=0.3,
     )
 
     # ── Title ─────────────────────────────────────────────────────────────────
     sp_label = "E. coli" if species == "ecoli" else "Salmonella enterica"
     fig.suptitle(
-        f"{sp_label} core-SNP phylogeny with AMR profile  (n = {n} isolates)",
+        f"{sp_label} core-SNP phylogeny with virulence & AMR profiles  (n = {n} isolates)",
         fontsize=11, fontweight="bold", y=1.01,
     )
 
     # ── Save ──────────────────────────────────────────────────────────────────
     for ext in ("pdf", "png"):
-        out = outdir / f"{prefix}_{species}_tree_amr.{ext}"
+        out = outdir / f"{prefix}_tree_amr.{ext}"
         fig.savefig(out, dpi=300, bbox_inches="tight")
         print(f"  Saved: {out}", file=sys.stderr)
     plt.close(fig)

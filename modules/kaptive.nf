@@ -40,7 +40,7 @@ process KAPTIVE_G2G3 {
         ${g2g3_db} \\
         ${fasta} \\
         -o ${sample_id}_kaptive_g2g3.tsv \\
-        --threads ${task.cpus} \\
+        -t ${task.cpus} \\
         2>${sample_id}_kaptive_g2g3.log \\
     || true
 
@@ -77,8 +77,8 @@ process KAPTIVE_G1G4 {
     kaptive assembly \\
         ${g1g4_db} \\
         ${fasta} \\
-        --scores ${sample_id}_kaptive_g1g4_raw_scores.tsv \\
-        --threads ${task.cpus} \\
+        -s ${sample_id}_kaptive_g1g4_raw_scores.tsv \\
+        -t ${task.cpus} \\
         2>${sample_id}_kaptive_g1g4.log \\
     || true
 

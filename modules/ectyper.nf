@@ -17,14 +17,15 @@ process ECTYPER {
 
     script:
     """
+    # ECTyper v1.x uses single-dash long options: -opid not --opid
     ectyper \\
         --input   ${fasta} \\
         --output  ectyper_out \\
         --cores   ${task.cpus} \\
-        --opid    90 \\
-        --hpid    90 \\
-        --opcov   50 \\
-        --hpcov   50 \\
+        -opid     90 \\
+        -hpid     90 \\
+        -opcov    50 \\
+        -hpcov    50 \\
         2>${sample_id}_ectyper.log \\
     || true
 

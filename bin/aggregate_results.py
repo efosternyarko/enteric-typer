@@ -76,17 +76,21 @@ def load_st_complexes(path: str) -> dict[str, str]:
     return lookup
 
 
+AMR_TYPES      = {"AMR", "POINT"}   # element types that count as resistance
+VIRULENCE_TYPES = {"VIRULENCE"}      # element types that are virulence factors
+STRESS_TYPES    = {"STRESS"}         # stress response — kept separate, excluded from AMR plot
+
+
 def load_amrfinder(files: list[str],
                    wildtype_genes: frozenset[str] = frozenset()
                    ) -> dict[str, dict[str, str]]:
     """
-    Parse AMRFinder output.
+    Parse AMRFinder output, splitting by element Type:
 
-    Returns {sample: {
-        'all':       semicolon-list of all genes (raw),
-        'acquired':  semicolon-list of non-intrinsic genes,
-        'intrinsic': semicolon-list of AMRrules wildtype genes,
-    }}
+      amrfinder_acquired_genes   — AMR/POINT type, not in AMRrules wildtype set
+      amrfinder_intrinsic_genes  — AMR/POINT type, in AMRrules wildtype set
+      amrfinder_virulence_genes  — VIRULENCE type (separate column, not mixed into AMR)
+      amrfinder_genes            — all genes raw (for reference)
     """
     raw: dict[str, dict[str, set]] = {}
 
@@ -96,22 +100,31 @@ def load_amrfinder(files: list[str],
         with open(f) as fh:
             reader = csv.DictReader(fh, delimiter="\t")
             for row in reader:
-                sid  = (row.get("Name") or "").strip()
-                gene = (row.get("Gene symbol") or row.get("Element symbol") or "").strip()
+                sid      = (row.get("Name") or "").strip()
+                gene     = (row.get("Gene symbol") or row.get("Element symbol") or "").strip()
+                etype    = (row.get("Type") or row.get("Element type") or "AMR").strip().upper()
                 if not sid or not gene:
                     continue
-                d = raw.setdefault(sid, {"all": set(), "acquired": set(), "intrinsic": set()})
+                d = raw.setdefault(sid, {
+                    "all": set(), "acquired": set(),
+                    "intrinsic": set(), "virulence": set(),
+                })
                 d["all"].add(gene)
-                if gene in wildtype_genes:
-                    d["intrinsic"].add(gene)
-                else:
-                    d["acquired"].add(gene)
+                if etype in VIRULENCE_TYPES:
+                    d["virulence"].add(gene)
+                elif etype in AMR_TYPES:
+                    if gene in wildtype_genes:
+                        d["intrinsic"].add(gene)
+                    else:
+                        d["acquired"].add(gene)
+                # STRESS and other types are captured in 'all' only
 
     return {
         sid: {
             "all":       ";".join(sorted(d["all"]))       if d["all"]       else "NA",
             "acquired":  ";".join(sorted(d["acquired"]))  if d["acquired"]  else "NA",
             "intrinsic": ";".join(sorted(d["intrinsic"])) if d["intrinsic"] else "NA",
+            "virulence": ";".join(sorted(d["virulence"])) if d["virulence"] else "NA",
         }
         for sid, d in raw.items()
     }
@@ -122,7 +135,7 @@ def load_amrfinder_classes(files: list[str],
                             ) -> dict[str, str]:
     """
     Collapse AMRFinder output to {sample: semicolon-list-of-unique-drug-classes}.
-    Only acquired (non-intrinsic) genes are counted.
+    Only acquired AMR/POINT-type (non-intrinsic, non-virulence) genes are counted.
     """
     results: dict[str, set] = {}
     for f in files:
@@ -131,14 +144,42 @@ def load_amrfinder_classes(files: list[str],
         with open(f) as fh:
             reader = csv.DictReader(fh, delimiter="\t")
             for row in reader:
-                sid  = (row.get("Name") or "").strip()
-                gene = (row.get("Gene symbol") or row.get("Element symbol") or "").strip()
-                cls  = (row.get("Class") or "").strip()
+                sid   = (row.get("Name") or "").strip()
+                gene  = (row.get("Gene symbol") or row.get("Element symbol") or "").strip()
+                etype = (row.get("Type") or row.get("Element type") or "AMR").strip().upper()
+                cls   = (row.get("Class") or "").strip()
                 if sid and gene and cls and cls not in ("NA", ""):
-                    if gene not in wildtype_genes:   # acquired only
+                    if etype in AMR_TYPES and gene not in wildtype_genes:
                         results.setdefault(sid, set()).add(cls)
     return {sid: ";".join(sorted(classes)) if classes else "NA"
             for sid, classes in results.items()}
+
+
+def load_amrfinder_gene_classes(files: list[str],
+                                 wildtype_genes: frozenset[str] = frozenset()
+                                 ) -> dict[str, str]:
+    """
+    Return {sample: 'gene=CLASS;gene2=CLASS2;...'} for acquired AMR/POINT genes.
+    Used by plot_summary.py to draw gene-filled drug class bars.
+    """
+    raw: dict[str, dict[str, str]] = {}   # {sample: {gene: class}}
+    for f in files:
+        if not _valid(f):
+            continue
+        with open(f) as fh:
+            reader = csv.DictReader(fh, delimiter="\t")
+            for row in reader:
+                sid   = (row.get("Name") or "").strip()
+                gene  = (row.get("Gene symbol") or row.get("Element symbol") or "").strip()
+                etype = (row.get("Type") or row.get("Element type") or "AMR").strip().upper()
+                cls   = (row.get("Class") or "").strip().upper()
+                if sid and gene and cls and cls not in ("NA", ""):
+                    if etype in AMR_TYPES and gene not in wildtype_genes:
+                        raw.setdefault(sid, {})[gene] = cls
+    return {
+        sid: ";".join(f"{g}={c}" for g, c in sorted(d.items())) if d else "NA"
+        for sid, d in raw.items()
+    }
 
 
 def load_plasmidfinder(files: list[str]) -> dict[str, str]:
@@ -204,6 +245,120 @@ def load_sistr(files: list[str]) -> dict[str, dict]:
     return results
 
 
+def load_clermont(files: list[str]) -> dict[str, str]:
+    """
+    Parse EzClermont per-sample TSV files.
+    Expected columns: sample, clermont_phylogroup
+    Returns {sample_id: phylogroup_string}.
+    """
+    result: dict[str, str] = {}
+    for f in files:
+        with open(f) as fh:
+            reader = csv.DictReader(fh, delimiter="\t")
+            for row in reader:
+                sid = (row.get("sample") or "").strip()
+                pg  = (row.get("clermont_phylogroup") or "Unknown").strip()
+                if sid:
+                    result[sid] = pg if pg not in ("", "-", "NA", "nan") else "Unknown"
+    return result
+
+
+def load_kleborate(files: list[str]) -> dict[str, dict]:
+    """
+    Parse Kleborate v3 --preset escherichia output (with --trim_headers).
+
+    Extracts:
+      kleborate_phylogroup  — Clermont type (clermont_type column)
+      kleborate_pathovar    — pathotype: STEC/EPEC/ETEC/EIEC/EHEC or '-'
+      kleborate_Stx1        — Stx1 gene hits (';'-separated) or '-'
+      kleborate_Stx2        — Stx2 gene hits
+      kleborate_eae         — intimin '+'/'-'
+      kleborate_ipaH        — ipaH invasion gene '+'/'-'
+      kleborate_LT          — heat-labile enterotoxin '+'/'-'
+      kleborate_ST_toxin    — heat-stable enterotoxin '+'/'-' (renamed to avoid ST ambiguity)
+    """
+    def _get(row: dict, *keys: str) -> str:
+        """Try multiple possible column names (handles full and trimmed header formats)."""
+        for k in keys:
+            v = row.get(k)
+            if v is not None:
+                return v.strip()
+        return ""
+
+    results: dict[str, dict] = {}
+    for f in files:
+        if not _valid(f):
+            continue
+        with open(f) as fh:
+            reader = csv.DictReader(fh, delimiter="\t")
+            for row in reader:
+                sid = (row.get("sample") or "").strip()
+                if not sid:
+                    continue
+                results[sid] = {
+                    # Phylogroup
+                    "kleborate_phylogroup": _na(
+                        _get(row, "clermont_type",
+                             "escherichia__ezclermont__clermont_type") or None
+                    ),
+                    # Pathotype
+                    "kleborate_pathovar": _na(
+                        _get(row, "Pathotype",
+                             "escherichia__pathovar__Pathotype") or None
+                    ),
+                    # Pathovar markers
+                    "kleborate_Stx1": _na(
+                        _get(row, "Stx1", "escherichia__pathovar__Stx1") or None
+                    ),
+                    "kleborate_Stx2": _na(
+                        _get(row, "Stx2", "escherichia__pathovar__Stx2") or None
+                    ),
+                    "kleborate_eae": _na(
+                        _get(row, "eae", "escherichia__pathovar__eae") or None
+                    ),
+                    "kleborate_ipaH": _na(
+                        _get(row, "ipaH", "escherichia__pathovar__ipaH") or None
+                    ),
+                    "kleborate_LT": _na(
+                        _get(row, "LT", "escherichia__pathovar__LT") or None
+                    ),
+                    # 'ST' column = heat-stable enterotoxin; renamed to avoid MLST ST confusion
+                    "kleborate_ST_toxin": _na(
+                        _get(row, "ST", "escherichia__pathovar__ST") or None
+                    ),
+                }
+    return results
+
+
+def load_abricate(files: list[str], mincov: float = 80.0, minid: float = 90.0) -> dict[str, str]:
+    """
+    Parse abricate output → {sample: semicolon-list-of-gene-names}.
+    Applies optional mincov / minid thresholds (abricate's own --mincov/--minid
+    already filter, but this provides a second check if defaults differ).
+    """
+    raw: dict[str, set] = {}
+    for f in files:
+        if not _valid(f):
+            continue
+        with open(f) as fh:
+            # abricate writes a header starting with '#FILE'; strip leading #
+            first = fh.readline().lstrip("#").strip()
+            headers = first.split("\t")
+            reader = csv.DictReader(fh, fieldnames=headers, delimiter="\t")
+            for row in reader:
+                sid  = (row.get("sample") or "").strip()
+                gene = (row.get("GENE") or "").strip()
+                try:
+                    cov = float(row.get("%COVERAGE") or 0)
+                    pid = float(row.get("%IDENTITY") or 0)
+                except ValueError:
+                    continue
+                if sid and gene and cov >= mincov and pid >= minid:
+                    raw.setdefault(sid, set()).add(gene)
+    return {sid: ";".join(sorted(genes)) if genes else "NA"
+            for sid, genes in raw.items()}
+
+
 def load_ktype(files: list[str]) -> dict[str, dict]:
     """Load parse_kaptive per-sample TSV files → {sample: {k_group, k_locus, k_type, ...}}."""
     results: dict[str, dict] = {}
@@ -264,12 +419,18 @@ def _na(v) -> str:
 ECOLI_COLUMNS = [
     "sample",
     "mlst_scheme", "mlst_st", "mlst_st_complex",
+    "kleborate_phylogroup",
+    "kleborate_pathovar",
+    "kleborate_Stx1", "kleborate_Stx2", "kleborate_eae",
+    "kleborate_ipaH", "kleborate_LT", "kleborate_ST_toxin",
     "ectyper_O", "ectyper_H", "ectyper_serotype", "ectyper_qc", "ectyper_evidence",
     "k_group", "k_locus", "k_type", "k_confidence",
     "amrfinder_acquired_genes",
     "amrfinder_intrinsic_genes",
+    "amrfinder_virulence_genes",
     "amrfinder_genes",
     "amrfinder_drug_classes",
+    "amrfinder_gene_classes",
     "plasmidfinder_replicons",
     "pw_status", "pw_species", "pw_genome_uuid", "pw_collection_url",
     "pw_cgmlst_st",
@@ -287,8 +448,11 @@ SALMONELLA_COLUMNS = [
     "sistr_O", "sistr_H1", "sistr_H2", "sistr_cgmlst_ST", "sistr_qc",
     "amrfinder_acquired_genes",
     "amrfinder_intrinsic_genes",
+    "amrfinder_virulence_genes",
+    "abricate_vfdb_genes",
     "amrfinder_genes",
     "amrfinder_drug_classes",
+    "amrfinder_gene_classes",
     "plasmidfinder_replicons",
     "pw_status", "pw_species", "pw_genome_uuid", "pw_collection_url",
     "pw_cgmlst_st",
@@ -312,6 +476,12 @@ def main() -> None:
     parser.add_argument("--plasmidfinder", nargs="+", default=[])
     parser.add_argument("--ktype",         nargs="+", default=[],
                         help="parse_kaptive output TSV files (E. coli only)")
+    parser.add_argument("--kleborate",     nargs="+", default=[],
+                        help="Kleborate output TSV files (E. coli only)")
+    parser.add_argument("--abricate-vfdb", nargs="+", default=[], dest="abricate_vfdb",
+                        help="abricate VFDB output TSV files (Salmonella only)")
+    parser.add_argument("--clermont",      nargs="+", default=[],
+                        help="EzClermont phylotyping TSV files (E. coli only)")
     parser.add_argument("--pathogenwatch", default="NO_FILE")
     parser.add_argument("--st-complexes",  default=None)
     parser.add_argument("--amrrules",      default=None,
@@ -328,13 +498,17 @@ def main() -> None:
         print("INFO: No AMRrules file provided — amrfinder_intrinsic_genes will be NA for all samples.",
               file=sys.stderr)
 
-    mlst_data    = load_mlst(args.mlst)
-    st_lookup    = load_st_complexes(args.st_complexes)
-    amr_data     = load_amrfinder(args.amrfinder, wildtype_genes)
-    amr_classes  = load_amrfinder_classes(args.amrfinder, wildtype_genes)
-    plasmid_data = load_plasmidfinder(args.plasmidfinder)
-    ktype_data   = load_ktype(args.ktype) if args.species == "ecoli" else {}
-    pw_data      = load_pathogenwatch(args.pathogenwatch)
+    mlst_data      = load_mlst(args.mlst)
+    st_lookup      = load_st_complexes(args.st_complexes)
+    amr_data       = load_amrfinder(args.amrfinder, wildtype_genes)
+    amr_classes    = load_amrfinder_classes(args.amrfinder, wildtype_genes)
+    amr_gene_cls   = load_amrfinder_gene_classes(args.amrfinder, wildtype_genes)
+    plasmid_data   = load_plasmidfinder(args.plasmidfinder)
+    ktype_data     = load_ktype(args.ktype)         if args.species == "ecoli" else {}
+    kleb_data      = load_kleborate(args.kleborate) if args.species == "ecoli" else {}
+    clermont_data  = load_clermont(args.clermont)   if args.species == "ecoli" else {}
+    abricate_data  = load_abricate(args.abricate_vfdb)
+    pw_data        = load_pathogenwatch(args.pathogenwatch)
 
     if args.species == "ecoli":
         sero_data = load_ectyper(args.serotyper)
@@ -349,6 +523,8 @@ def main() -> None:
         list(sero_data.keys()) +
         list(plasmid_data.keys()) +
         list(ktype_data.keys()) +
+        list(kleb_data.keys()) +
+        list(abricate_data.keys()) +
         list(pw_data.keys())
     ))
 
@@ -368,22 +544,28 @@ def main() -> None:
         writer.writeheader()
 
         for sid in all_samples:
-            ml  = mlst_data.get(sid, {})
-            st  = ml.get("mlst_st", "NA")
-            pw  = pw_data.get(sid, {})
-            sr  = sero_data.get(sid, {})
-            kt  = ktype_data.get(sid, {})
-            amr = amr_data.get(sid, {})
+            ml   = mlst_data.get(sid, {})
+            st   = ml.get("mlst_st", "NA")
+            pw   = pw_data.get(sid, {})
+            sr   = sero_data.get(sid, {})
+            kt   = ktype_data.get(sid, {})
+            kleb = kleb_data.get(sid, {})
+            # EzClermont phylogroup takes priority over Kleborate's (often absent) clermont_type
+            clermont_pg = clermont_data.get(sid, None)
+            amr  = amr_data.get(sid, {})
 
             row: dict = {
                 "sample":                   sid,
                 "mlst_scheme":              ml.get("mlst_scheme",       "NA"),
                 "mlst_st":                  st,
                 "mlst_st_complex":          st_lookup.get(st,           "NA"),
-                "amrfinder_acquired_genes": amr.get("acquired",         "NA"),
-                "amrfinder_intrinsic_genes":amr.get("intrinsic",        "NA"),
-                "amrfinder_genes":          amr.get("all",              "NA"),
+                "amrfinder_acquired_genes":   amr.get("acquired",   "NA"),
+                "amrfinder_intrinsic_genes":  amr.get("intrinsic",  "NA"),
+                "amrfinder_virulence_genes":  amr.get("virulence",  "NA"),
+                "abricate_vfdb_genes":        abricate_data.get(sid, "NA"),
+                "amrfinder_genes":            amr.get("all",        "NA"),
                 "amrfinder_drug_classes":   amr_classes.get(sid,        "NA"),
+                "amrfinder_gene_classes":   amr_gene_cls.get(sid,       "NA"),
                 "plasmidfinder_replicons":  plasmid_data.get(sid,       "NA"),
                 "pw_status":               pw.get("pw_status",          "NA"),
                 "pw_species":              pw.get("pw_species",         "NA"),
@@ -396,6 +578,17 @@ def main() -> None:
                 row[col] = pw.get(col, "NA")
 
             if args.species == "ecoli":
+                row.update({
+                    "kleborate_phylogroup":  (clermont_pg if clermont_pg
+                                              else kleb.get("kleborate_phylogroup", "NA")),
+                    "kleborate_pathovar":    kleb.get("kleborate_pathovar",    "NA"),
+                    "kleborate_Stx1":        kleb.get("kleborate_Stx1",        "NA"),
+                    "kleborate_Stx2":        kleb.get("kleborate_Stx2",        "NA"),
+                    "kleborate_eae":         kleb.get("kleborate_eae",         "NA"),
+                    "kleborate_ipaH":        kleb.get("kleborate_ipaH",        "NA"),
+                    "kleborate_LT":          kleb.get("kleborate_LT",          "NA"),
+                    "kleborate_ST_toxin":    kleb.get("kleborate_ST_toxin",    "NA"),
+                })
                 row.update({
                     "k_group":      kt.get("k_group",      "NA"),
                     "k_locus":      kt.get("k_locus",      "NA"),

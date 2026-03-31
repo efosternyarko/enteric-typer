@@ -3,15 +3,15 @@
 A species-gated genotyping workflow for enteric pathogens. Given a folder of
 genome assemblies, the pipeline speciates each sample and deploys the
 appropriate species-specific typing tools, generates a core-SNP phylogeny, and
-(optionally) uploads results to Pathogenwatch and Microreact.
+produces publication-ready summary figures.
 
 ## Supported species
 
-| Species | Typing tools | Pathogenwatch |
-|---|---|---|
-| *Escherichia coli* | MLST (Achtman), AMRFinder, ECTyper (serotype), PlasmidFinder, Kaptive (K-locus) | Yes |
-| *Salmonella enterica* | MLST, AMRFinder, SISTR (serovar), PlasmidFinder | Yes |
-| Other / unclassified | Species ID only (logged and skipped) | — |
+| Species | Typing tools |
+|---|---|
+| *Escherichia coli* | MLST (Achtman), AMRFinder, ECTyper (serotype), EzClermont (Clermont phylogroup), Kleborate (pathotype on Linux; MLST on macOS ARM64), PlasmidFinder, Kaptive (K-locus) |
+| *Salmonella enterica* | MLST, AMRFinder, SISTR (serovar), PlasmidFinder, Abricate VFDB |
+| Other / unclassified | Species ID only (logged and skipped) |
 
 ## Workflow overview
 
@@ -31,50 +31,46 @@ E. coli   Salmonella   (other species logged and skipped)
 ┌────────────────────────────────────────────────────────────┐
 │  2. SPECIES-SPECIFIC TYPING  (all tools run in parallel)   │
 │                                                            │
-│  E. coli                  Salmonella                       │
-│  ─────────────────────    ───────────────────────          │
-│  MLST (achtman_4)         MLST (salmonella)                │
-│  AMRFinder                AMRFinder                        │
-│  ECTyper (O:H serotype)   SISTR (serovar)                  │
-│  PlasmidFinder            PlasmidFinder                    │
+│  E. coli                       Salmonella                  │
+│  ──────────────────────────    ───────────────────────     │
+│  MLST (achtman_4)              MLST (salmonella)           │
+│  AMRFinder                     AMRFinder                   │
+│  ECTyper (O:H serotype)        SISTR (serovar)             │
+│  EzClermont (phylogroup)       PlasmidFinder               │
+│  Kleborate (pathotype on       Abricate VFDB               │
+│    Linux; MLST on macOS ARM64)                             │
+│  PlasmidFinder                                             │
 │  Kaptive K-locus (G2/G3                                    │
 │    → G1/G4 on untypeables)                                 │
 └────────────────────────────────────────────────────────────┘
         │
         ▼
-┌──────────────────────────────────────────────────────┐
-│  3. PHYLOGENETICS  (per species, ≥ 3 samples needed)  │
-│  SKA2 build → core-SNP alignment → IQ-TREE ML tree   │
-└──────────────────────────────────────────────────────┘
-        │
-        ▼  (if --run_pathogenwatch)
-┌───────────────────────────────────────────────────────────────┐
-│  4. PATHOGENWATCH                                             │
-│  Upload → wait → create collection → download tree           │
-│  → cgMLST cluster search at thresholds 5, 10, 20, 50 alleles │
-└───────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  3. PHYLOGENETICS  (per species, ≥ 3 samples; skip with         │
+│                    --skip_local_phylo)                          │
+│  SKA2 build (k=31) → core-SNP alignment + SNP distance matrix  │
+│  → IQ-TREE ML tree (ModelFinder Plus automatic model selection) │
+└─────────────────────────────────────────────────────────────────┘
         │
         ▼
-┌──────────────────────────────────────────────────────┐
-│  5. AGGREGATE  (one TSV per species)                  │
-│  ecoli_typer_results.tsv                              │
-│  salmonella_typer_results.tsv                         │
-└──────────────────────────────────────────────────────┘
-        │
-        ▼  (if --upload_microreact)
-┌──────────────────────────────────────────────────────┐
-│  6. MICROREACT                                        │
-│  Results TSV + IQ-TREE Newick → Microreact project   │
-└──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  4. AGGREGATE  (one TSV per species)                         │
+│  ecoli_typer_results.tsv                                     │
+│  salmonella_typer_results.tsv                                │
+│  (includes acquired vs intrinsic AMR gene classification     │
+│   via AMRrules — intrinsic genes flagged, not excluded)      │
+└──────────────────────────────────────────────────────────────┘
         │
         ▼
-┌───────────────────────────────────────────────────────────────────┐
-│  7. SUMMARY PLOTS  (always runs — no API keys required)           │
-│  Fig 1: ST distribution · serotypes · AMR prevalence · MDR       │
-│  Fig 2: Core-SNP tree + phylogroup strip + AMR heatmap           │
-│  Fig 3: Top AMR genes (intrinsic genes excluded via AMRrules)     │
-│  Fig 4: Plasmid replicon types                                    │
-└───────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  5. SUMMARY PLOTS                                                    │
+│  Fig 1: ST distribution · serotypes · AMR drug classes · MDR        │
+│  Fig 2: Core-SNP tree + phylogroup strip + virulence + AMR gene panel │
+│  Fig 3: Top acquired AMR genes (intrinsic genes excluded)            │
+│  Fig 4: Plasmid replicon types                                       │
+│  Fig 5: Virulence genes / pathotype (E. coli) or VFDB (Salmonella)  │
+│  Fig 6: Pairwise core-SNP distance heatmap                           │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -244,10 +240,17 @@ Expected runtime: 1–5 minutes depending on bandwidth.
 ### For a given folder of assemblies
 
 ```bash
+# Linux / Intel Mac
 nextflow run main.nf \
     --input_dir /path/to/assemblies/ \
     --outdir    results/ \
     -profile conda
+
+# Apple Silicon (M1/M2/M3/M4) — add arm64 profile
+nextflow run main.nf \
+    --input_dir /path/to/assemblies/ \
+    --outdir    results/ \
+    -profile conda,arm64
 ```
 
 ### Or to use a samplesheet
@@ -265,25 +268,19 @@ nextflow run main.nf \
     -profile conda
 ```
 
-### Full run with Pathogenwatch + Microreact
+### Skip local phylogenetics (faster, no SKA2/IQ-TREE)
 
 ```bash
-# Set API keys once
-nextflow secrets set PW_API_KEY       <your_pathogenwatch_key>
-nextflow secrets set MICROREACT_TOKEN <your_microreact_token>
-```
-
-```bash
-# Run the workflow
-# Replace "My enteric outbreak" with a project name of your choice
 nextflow run main.nf \
-    --input_dir            /path/to/assemblies/ \
-    --outdir               results/ \
-    --run_pathogenwatch \
-    --upload_microreact \
-    --microreact_project   "My enteric outbreak" \
+    --input_dir        /path/to/assemblies/ \
+    --outdir           results/ \
+    --skip_local_phylo \
     -profile conda
 ```
+
+> When `--skip_local_phylo` is set, the SNP distance matrix, SNP heatmap, and
+> tree annotation figures are not produced. Microreact upload (if enabled) will
+> not include a tree.
 
 ---
 
@@ -294,13 +291,9 @@ nextflow run main.nf \
 | `--input_dir` | `null` | Folder of FASTA assemblies (`.fasta/.fa/.fna/.fas`) |
 | `--samplesheet` | `null` | CSV with `id,fasta` columns |
 | `--outdir` | `results` | Output directory |
-| `--run_pathogenwatch` | `false` | Upload to Pathogenwatch (requires `PW_API_KEY`) |
-| `--upload_microreact` | `false` | Create Microreact project (requires `MICROREACT_TOKEN`) |
-| `--microreact_project` | `enteric-typer run` | Microreact project name prefix |
-| `--pathogenwatch_cluster_thresholds` | `5,10,20,50` | cgMLST allele-difference thresholds |
+| `--skip_local_phylo` | `false` | Skip SKA2 + IQ-TREE (no tree, no SNP matrix/heatmap) |
 | `--ska2_min_samples` | `3` | Minimum samples to attempt SKA2/IQ-TREE |
-| `--ska2_prop_filter` | `0.95` | Core-genome proportion filter for SKA2 |
-| `--iqtree_model` | `GTR+G` | IQ-TREE substitution model |
+| `--iqtree_model` | `MFP` | IQ-TREE substitution model (`MFP` = ModelFinder Plus automatic selection) |
 | `--iqtree_bootstraps` | `1000` | IQ-TREE ultrafast bootstrap replicates |
 
 ---
@@ -338,36 +331,32 @@ results/
 │   └── *_plasmidfinder.tsv
 │
 ├── ska2_ecoli/
-│   └── ska2_alignment.fasta
+│   ├── ska2_alignment.fasta       ← core-SNP alignment (input to IQ-TREE)
+│   └── snp_matrix.tsv             ← pairwise core-SNP distance matrix
 ├── iqtree_ecoli/
 │   ├── iqtree.treefile             ← Newick ML tree
-│   └── iqtree.iqtree               ← IQ-TREE log
+│   └── iqtree.iqtree               ← IQ-TREE log + best-fit model
 ├── ska2_salmonella/
-│   └── ska2_alignment.fasta
+│   ├── ska2_alignment.fasta
+│   └── snp_matrix.tsv
 ├── iqtree_salmonella/
 │   ├── iqtree.treefile
 │   └── iqtree.iqtree
 │
-├── pathogenwatch/                  ← (if --run_pathogenwatch)
-│   ├── ecoli_pathogenwatch_samples.tsv
-│   ├── ecoli_pathogenwatch_collection.json
-│   ├── ecoli_pathogenwatch_tree.nwk
-│   ├── salmonella_pathogenwatch_samples.tsv
-│   └── salmonella_pathogenwatch_collection.json
-│
 ├── ecoli_typer_results.tsv         ← Master results table (E. coli)
 ├── salmonella_typer_results.tsv    ← Master results table (Salmonella)
 │
-├── microreact_url_*.txt            ← (if --upload_microreact) Microreact URLs
+│   Both tables include AMRFinder columns:
+│     amrfinder_acquired_genes   — resistance genes (intrinsic excluded)
+│     amrfinder_intrinsic_genes  — wildtype/intrinsic genes (flagged, not excluded)
+│     amrfinder_genes            — all raw AMRFinder hits
 │
-├── ecoli_fig1_population_summary.{pdf,png}
-├── ecoli_fig3_amr_genes.{pdf,png}
-├── ecoli_fig4_plasmid_replicons.{pdf,png}
-├── ecoli_tree_amr.{pdf,png}        ← Phylogeny + AMR heatmap
-├── salmonella_fig1_population_summary.{pdf,png}
-├── salmonella_fig3_amr_genes.{pdf,png}
-├── salmonella_fig4_plasmid_replicons.{pdf,png}
-└── salmonella_tree_amr.{pdf,png}
+├── {species}_fig1_population_summary.{pdf,png}   ← ST · serotype · AMR drug classes · MDR
+├── {species}_fig3_amr_genes.{pdf,png}            ← Acquired AMR gene frequencies
+├── {species}_fig4_plasmid_replicons.{pdf,png}    ← Plasmid replicon types
+├── {species}_fig5_virulence.{pdf,png}            ← Pathotype / virulence genes
+├── {species}_tree_amr.{pdf,png}                  ← Phylogeny + phylogroup + AMR heatmaps
+└── {species}_snp_heatmap.{pdf,png}               ← Pairwise core-SNP distance heatmap
 ```
 
 ---
@@ -395,11 +384,35 @@ conda install -c conda-forge graphviz
 |---|---|
 | `conda` | Local workstation with conda |
 | `mamba` | Same as conda but faster env solving |
+| `arm64` | **Add on Apple Silicon (M1/M2/M3/M4)** — forces osx-64 conda envs via Rosetta 2 |
 | `docker` | Local with Docker Desktop |
 | `singularity` | HPC cluster with Singularity/Apptainer |
 | `slurm` | SLURM HPC executor (combine with singularity: `-profile singularity,slurm`) |
 | `pbs` | PBS/Torque HPC executor |
 | `test` | Quick test run (no uploads) |
+
+### macOS Apple Silicon (M1/M2/M3/M4)
+
+Some Bioconda packages (notably `abricate`) have no native arm64 build. Add the `arm64`
+profile to force Rosetta 2 emulation — tools run at near-native speed and the pipeline
+behaves identically to Linux:
+
+```bash
+nextflow run main.nf \
+    --input_dir /path/to/assemblies/ \
+    --outdir    results/ \
+    -profile conda,arm64
+```
+
+> This creates conda environments as `osx-64` binaries. You only pay this cost once;
+> environments are cached and reused on subsequent runs.
+>
+> If you see a `LibMambaUnsatisfiableError` for `abricate` despite using `-profile conda,arm64`,
+> prepend `CONDA_SUBDIR=osx-64` to the command instead (libmamba on some versions reads
+> the env var rather than the `--platform` flag):
+> ```bash
+> CONDA_SUBDIR=osx-64 nextflow run main.nf --input_dir /path/to/assemblies/ --outdir results/ -profile conda
+> ```
 
 ---
 
@@ -439,11 +452,12 @@ If you use enteric-typer, please cite the tools it wraps:
 - **MLST**: Seemann (2016) github.com/tseemann/mlst
 - **AMRFinder Plus**: Feldgarden et al. (2021) Scientific Reports 11:12728
 - **ECTyper**: Laing et al. (2019) Microbial Genomics 5(12)
+- **EzClermont**: Waters et al. (2020) Microbial Genomics 6(9)
 - **SISTR**: Yoshida et al. (2016) PLOS ONE 11(1):e0147101
 - **PlasmidFinder**: Carattoli et al. (2014) Antimicrobial Agents and Chemotherapy
 - **Kaptive**: Wyres et al. (2016) Microbial Genomics 2(10); Lam et al. (2022) Nature Protocols
+- **Kleborate**: Lam et al. (2021) Nature Communications; github.com/klebgenomics/Kleborate
+- **Abricate**: github.com/tseemann/abricate
 - **SKA2**: github.com/bacpop/ska.rust
 - **IQ-TREE 2**: Minh et al. (2020) Molecular Biology and Evolution 37(5)
-- **Pathogenwatch**: Argimón et al. (2021) Nature Communications 12:2732
-- **Microreact**: Argimón et al. (2016) Microbial Genomics 2(11)
 - **AMRrules**: github.com/AMRverse/AMRrules

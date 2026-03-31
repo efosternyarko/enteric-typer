@@ -7,7 +7,12 @@ work/
 
 # Pipeline output
 results/
+results_*/
 test_results/
+
+# Test / user genome data (large FASTA files — not for repo)
+test_salmonella_genomes/
+nhp_e_coli_genomes/
 
 # Reference genomes (large binary/FASTA files — build locally)
 assets/reference_genomes/

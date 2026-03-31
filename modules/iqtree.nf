@@ -17,7 +17,7 @@ process IQTREE {
     path("iqtree.*"),          emit: all,        optional: true
 
     script:
-    def model       = params.iqtree_model      ?: 'GTR+G'
+    def model       = params.iqtree_model      ?: 'MFP'
     def bootstraps  = params.iqtree_bootstraps ?: 1000
     """
     # Count sequences in alignment
