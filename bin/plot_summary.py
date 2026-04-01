@@ -11,6 +11,9 @@ Produces (PDF + PNG at 300 dpi):
   {prefix}_fig2_resistome_heatmap    — sample × drug-class binary matrix ordered by ST
   {prefix}_fig3_amr_genes            — top-25 AMR genes/determinants
   {prefix}_fig4_plasmid_replicons    — top-15 plasmid replicons
+  {prefix}_fig5_virulence            — virulence gene prevalence
+  {prefix}_fig7_amr_by_st            — AMRnet-style tile heatmap: drug class % by MLST ST
+  {prefix}_fig8_amr_by_group         — AMRnet-style tile heatmap: drug class % by serovar/phylogroup
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ matplotlib.use("Agg")
 import matplotlib.gridspec as gridspec
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -1061,6 +1065,179 @@ def _fig_virulence_salmonella(df: pd.DataFrame, outdir: Path, prefix: str, top_n
     _save(fig, outdir, f"{prefix}_fig5_virulence")
 
 
+# ── Figures 7 & 8: AMRnet-style tile heatmaps ────────────────────────────────
+
+# Colour map: 0 % = mid-grey; >0 % → cream → orange → dark-red → purple
+_AMRNET_GREY  = np.array([0.502, 0.502, 0.502])
+_AMRNET_CMAP  = LinearSegmentedColormap("amrnet_pos", {
+    "red":   [(0.0, 1.000, 1.000), (0.5, 1.000, 1.000),
+              (0.8, 0.741, 0.741), (1.0, 0.290, 0.290)],
+    "green": [(0.0, 0.973, 0.973), (0.5, 0.600, 0.600),
+              (0.8, 0.031, 0.031), (1.0, 0.004, 0.004)],
+    "blue":  [(0.0, 0.882, 0.882), (0.5, 0.302, 0.302),
+              (0.8, 0.051, 0.051), (1.0, 0.549, 0.549)],
+})
+
+# Canonical short abbreviations for drug classes
+_DC_ABBREV: dict[str, str] = {
+    "TETRACYCLINE":        "TET",
+    "AMINOGLYCOSIDE":      "AMG",
+    "SULFONAMIDE":         "SUL",
+    "BETA-LACTAM":         "BLA",
+    "TRIMETHOPRIM":        "TMP",
+    "FOSFOMYCIN":          "FOS",
+    "MACROLIDE":           "MAC",
+    "PHENICOL":            "PHE",
+    "QUINOLONE":           "QNL",
+    "QUINOLONE/TRICLOSAN": "QNL",   # merge with QUINOLONE
+    "MULTIDRUG":           "MDR",
+    "FOSMIDOMYCIN":        "FOSM",
+    "COLISTIN":            "COL",
+    "NITROFURAN":          "NIT",
+    "STREPTOTHRICIN":      "STR",
+}
+_EXCLUDE_DC = {"EFFLUX"}   # near-universal in E. coli — excluded from heatmaps
+
+
+def _amrnet_matrix(
+    df: pd.DataFrame,
+    row_col: str,
+    top_n: int = 15,
+) -> pd.DataFrame:
+    """
+    Build a (rows × drug-class) matrix of % isolates carrying each class.
+    Rows = top_n most common values in row_col (Unknown pushed to end).
+    Columns = drug classes sorted by overall prevalence (EFFLUX excluded).
+    """
+    def _parse(cell) -> set[str]:
+        if pd.isna(cell) or str(cell).strip() in ("", "-"):
+            return set()
+        raw = {x.strip() for x in str(cell).split(";") if x.strip()}
+        raw -= _EXCLUDE_DC
+        return {_DC_ABBREV.get(r, r) for r in raw}
+
+    df = df.copy()
+    df["_row"] = df[row_col].fillna("Unknown").apply(
+        lambda v: clean_st(v) if "st" in row_col.lower() else str(v)
+    )
+    dc_col = next((c for c in ["amrfinder_drug_classes", "amr_classes",
+                                "drug_classes", "resistance_classes"]
+                   if c in df.columns), None)
+    if dc_col is None:
+        return pd.DataFrame()
+    df["_cls"] = df[dc_col].apply(_parse)
+
+    counts  = Counter(df["_row"])
+    ordered = [r for r, _ in counts.most_common() if r != "Unknown"][:top_n]
+    if "Unknown" in counts:
+        ordered.append("Unknown")
+
+    cls_counts = Counter(c for s in df["_cls"] for c in s)
+    all_cls    = [c for c, _ in cls_counts.most_common()]
+
+    rows, labels = [], []
+    for cat in ordered:
+        sub = df[df["_row"] == cat]
+        n   = len(sub)
+        rows.append([100 * sum(1 for s in sub["_cls"] if dc in s) / n
+                     for dc in all_cls])
+        labels.append(f"{cat}  (n={n})")
+
+    return pd.DataFrame(rows, index=labels, columns=all_cls)
+
+
+def _draw_amrnet_ax(ax: plt.Axes, mat: pd.DataFrame, title: str) -> None:
+    """Draw one AMRnet tile heatmap onto *ax*."""
+    nrows, ncols = mat.shape
+    ax.set_xlim(-0.5, ncols - 0.5)
+    ax.set_ylim(-0.5, nrows - 0.5)
+    ax.invert_yaxis()
+    TILE = 0.88
+
+    for ri in range(nrows):
+        for ci in range(ncols):
+            pct  = mat.iloc[ri, ci]
+            face = _AMRNET_GREY if pct == 0 else np.array(_AMRNET_CMAP(pct / 100))[:3]
+            ax.add_patch(mpatches.FancyBboxPatch(
+                (ci - TILE / 2, ri - TILE / 2), TILE, TILE,
+                boxstyle="square,pad=0",
+                facecolor=face, edgecolor="white", linewidth=0.5,
+            ))
+            if pct > 0:
+                lum     = 0.299 * face[0] + 0.587 * face[1] + 0.114 * face[2]
+                txt_col = "white" if lum < 0.45 else "#333333"
+                label   = f"{pct:.0f}" if pct >= 1 else f"{pct:.1f}"
+                ax.text(ci, ri, label, ha="center", va="center",
+                        fontsize=7, color=txt_col)
+
+    ax.set_xticks(range(ncols))
+    ax.set_xticklabels(mat.columns, rotation=45, ha="left", fontsize=8)
+    ax.xaxis.set_ticks_position("top")
+    ax.xaxis.set_label_position("top")
+    ax.tick_params(axis="x", length=0, pad=3)
+    ax.set_yticks(range(nrows))
+    ax.set_yticklabels(mat.index, fontsize=8)
+    ax.tick_params(axis="y", length=0, pad=3)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.set_title(title, fontsize=9, fontweight="bold", pad=14)
+
+    legend_items = [
+        mpatches.Patch(facecolor=_AMRNET_GREY,                 label="0 %"),
+        mpatches.Patch(facecolor=_AMRNET_CMAP(0.01)[:3],       label="1–25 %"),
+        mpatches.Patch(facecolor=_AMRNET_CMAP(0.50)[:3],       label="50 %"),
+        mpatches.Patch(facecolor=_AMRNET_CMAP(0.80)[:3],       label="75–80 %"),
+        mpatches.Patch(facecolor=_AMRNET_CMAP(1.00)[:3],       label="100 %"),
+    ]
+    ax.legend(handles=legend_items, loc="lower right",
+              bbox_to_anchor=(1.02, -0.12), ncol=len(legend_items),
+              frameon=False, fontsize=7, handlelength=1.2,
+              handletextpad=0.4, columnspacing=0.8)
+
+
+def fig_amrnet_by_st(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
+    """Fig 7 — AMR drug class % by MLST ST."""
+    mat = _amrnet_matrix(df, "mlst_st", top_n=12)
+    if mat.empty or mat.shape[1] == 0:
+        return
+    nrows, ncols = mat.shape
+    fig, ax = plt.subplots(figsize=(max(6, ncols * 0.85 + 3),
+                                    max(4, nrows * 0.55 + 2)))
+    sp = ("Salmonella enterica" if "sistr_serovar" in df.columns else "Escherichia coli")
+    _draw_amrnet_ax(ax, mat,
+                    f"{sp} — AMR drug class prevalence by sequence type (ST)")
+    plt.tight_layout()
+    _save(fig, outdir, f"{prefix}_fig7_amr_by_st")
+
+
+def fig_amrnet_by_group(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
+    """Fig 8 — AMR drug class % by serovar (Salmonella) or phylogroup (E. coli)."""
+    is_sal = "sistr_serovar" in df.columns
+    if is_sal:
+        row_col  = "sistr_serovar"
+        sp       = "Salmonella enterica"
+        grp_name = "serovar"
+        top_n    = 15
+    elif "kleborate_phylogroup" in df.columns:
+        row_col  = "kleborate_phylogroup"
+        sp       = "Escherichia coli"
+        grp_name = "Clermont phylogroup"
+        top_n    = 10
+    else:
+        return
+
+    mat = _amrnet_matrix(df, row_col, top_n=top_n)
+    if mat.empty or mat.shape[1] == 0:
+        return
+    nrows, ncols = mat.shape
+    fig, ax = plt.subplots(figsize=(max(6, ncols * 0.85 + 3),
+                                    max(4, nrows * 0.55 + 2)))
+    _draw_amrnet_ax(ax, mat,
+                    f"{sp} — AMR drug class prevalence by {grp_name}")
+    plt.tight_layout()
+    _save(fig, outdir, f"{prefix}_fig8_amr_by_group")
+
+
 # ── Save helper ───────────────────────────────────────────────────────────────
 
 def _save(fig: plt.Figure, outdir: Path, stem: str) -> None:
@@ -1097,6 +1274,8 @@ def main() -> None:
     fig_amr_genes(df, outdir, args.prefix)
     fig_plasmid_replicons(df, outdir, args.prefix)
     fig_virulence(df, outdir, args.prefix)
+    fig_amrnet_by_st(df, outdir, args.prefix)
+    fig_amrnet_by_group(df, outdir, args.prefix)
     print("Done.", file=sys.stderr)
 
 
