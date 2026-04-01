@@ -209,7 +209,7 @@ workflow {
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 2b: Salmonella typing (parallel per sample)
     // ─────────────────────────────────────────────────────────────────────────
-    MLST_SALMONELLA(ch_salmonella,          'salmonella')
+    MLST_SALMONELLA(ch_salmonella,          'senterica_achtman_2')
     AMRFINDER_SALMONELLA(ch_salmonella,     'Salmonella')
     SISTR(ch_salmonella)
     ABRICATE(ch_salmonella, 'vfdb', 80, 90)

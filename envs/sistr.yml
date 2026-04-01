@@ -6,3 +6,4 @@ channels:
 dependencies:
   - sistr_cmd=1.1.2
   - blast
+  - setuptools     # pkg_resources; dropped from Python 3.12 stdlib

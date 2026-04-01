@@ -187,35 +187,8 @@ def _panel_st(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
     sts = df["mlst_st"].apply(clean_st) if "mlst_st" in df.columns else pd.Series(
         ["Unknown"] * len(df), index=df.index)
 
-    # Use real Kleborate phylogroup if present; fall back to static ST lookup
-    has_real_pg = (
-        "kleborate_phylogroup" in df.columns and
-        df["kleborate_phylogroup"].notna().any() and
-        df["kleborate_phylogroup"].astype(str).str.strip().ne("NA").any()
-    )
-
-    # Build ST → dominant phylogroup dict
-    if has_real_pg:
-        pg_col = df["kleborate_phylogroup"].astype(str).str.strip()
-        pg_col = pg_col.where(~pg_col.isin({"NA", "nan", "None", "-", ""}), "Unknown")
-        st_pg_ctr: dict[str, Counter] = {}
-        for st, pg in zip(sts, pg_col):
-            st_pg_ctr.setdefault(st, Counter())[pg] += 1
-        st_pg_map = {st: ctr.most_common(1)[0][0] for st, ctr in st_pg_ctr.items()}
-        title_suffix = " (Clermont)"
-    else:
-        st_pg_map = {}
-        title_suffix = " (ST-inferred)"
-
-    def _pg_for(lbl: str) -> str:
-        if lbl in ("Other", "Unknown"):
-            return lbl
-        if has_real_pg:
-            return st_pg_map.get(lbl, "Unknown")
-        return get_phylogroup(lbl)
-
-    def _col(lbl: str) -> str:
-        return PHYLOGROUP_COLORS.get(_pg_for(lbl), PHYLOGROUP_COLORS["Unknown"])
+    # Detect species: Salmonella has sistr columns; E. coli has kleborate/ectyper columns
+    is_salmonella = "sistr_serovar" in df.columns or "sistr_cgmlst_ST" in df.columns
 
     ctr = Counter(sts)
     unk_n = ctr.pop("Unknown", 0)
@@ -227,7 +200,43 @@ def _panel_st(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
     if other_n:  labels.append("Other");    values.append(other_n)
     if unk_n:    labels.append("Unknown");  values.append(unk_n)
 
-    colors = [_col(l) for l in labels]
+    if is_salmonella:
+        # Plain distinct colours per ST — no phylogroup logic for Salmonella
+        pal = _BOLD_PALETTE + sns.color_palette("husl", max(0, len(labels) - len(_BOLD_PALETTE)))
+        colors = [pal[i % len(pal)] if l not in ("Other", "Unknown") else "#bab0ac"
+                  for i, l in enumerate(labels)]
+        title_suffix = ""
+        show_pg_legend = False
+    else:
+        # E. coli: use real Kleborate phylogroup if present; fall back to static ST lookup
+        has_real_pg = (
+            "kleborate_phylogroup" in df.columns and
+            df["kleborate_phylogroup"].notna().any() and
+            df["kleborate_phylogroup"].astype(str).str.strip().ne("NA").any()
+        )
+        if has_real_pg:
+            pg_col = df["kleborate_phylogroup"].astype(str).str.strip()
+            pg_col = pg_col.where(~pg_col.isin({"NA", "nan", "None", "-", ""}), "Unknown")
+            st_pg_ctr: dict[str, Counter] = {}
+            for st, pg in zip(sts, pg_col):
+                st_pg_ctr.setdefault(st, Counter())[pg] += 1
+            st_pg_map = {st: ctr.most_common(1)[0][0] for st, ctr in st_pg_ctr.items()}
+            title_suffix = " (Clermont)"
+        else:
+            st_pg_map = {}
+            title_suffix = " (ST-inferred)"
+
+        def _pg_for(lbl: str) -> str:
+            if lbl in ("Other", "Unknown"):
+                return lbl
+            if has_real_pg:
+                return st_pg_map.get(lbl, "Unknown")
+            return get_phylogroup(lbl)
+
+        colors = [PHYLOGROUP_COLORS.get(_pg_for(l), PHYLOGROUP_COLORS["Unknown"])
+                  for l in labels]
+        show_pg_legend = True
+
     y = np.arange(len(labels))
     ax.barh(y, values, color=colors, edgecolor="white", linewidth=0.6, height=0.78)
     ax.set_yticks(y); ax.set_yticklabels(labels, fontsize=8)
@@ -241,15 +250,16 @@ def _panel_st(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
     ax.spines["bottom"].set_linewidth(0.8)
     ax.yaxis.set_ticks_position("none")
 
-    # Phylogroup legend — outside, right
-    seen: dict[str, str] = {}
-    for lbl in labels:
-        pg = _pg_for(lbl)
-        seen.setdefault(pg, _col(lbl))
-    patches = [mpatches.Patch(facecolor=c, label=pg, linewidth=0) for pg, c in seen.items()]
-    ax.legend(handles=patches, title="Phylogroup", fontsize=7, title_fontsize=7.5,
-              bbox_to_anchor=(1.02, 1), loc="upper left",
-              frameon=False, handlelength=1.2, handleheight=1.2)
+    if show_pg_legend:
+        # Phylogroup legend — outside, right (E. coli only)
+        seen: dict[str, str] = {}
+        for lbl in labels:
+            pg = _pg_for(lbl)
+            seen.setdefault(pg, PHYLOGROUP_COLORS.get(_pg_for(lbl), PHYLOGROUP_COLORS["Unknown"]))
+        patches = [mpatches.Patch(facecolor=c, label=pg, linewidth=0) for pg, c in seen.items()]
+        ax.legend(handles=patches, title="Phylogroup", fontsize=7, title_fontsize=7.5,
+                  bbox_to_anchor=(1.02, 1), loc="upper left",
+                  frameon=False, handlelength=1.2, handleheight=1.2)
 
 
 # K-locus group colours (G1–G4 + Unknown) — consistent across all figures
@@ -292,8 +302,10 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
         labels.append("Other / Unknown")
 
     # ── Decide fill strategy ──────────────────────────────────────────────────
-    use_klocus    = (species == "ecoli"      and "k_locus"        in df.columns)
-    use_stcomplex = (species == "salmonella" and "mlst_st_complex" in df.columns)
+    use_klocus      = (species == "ecoli"      and "k_locus"          in df.columns)
+    use_clonalgroup = (species == "salmonella" and "sistr_cgmlst_ST"  in df.columns)
+    use_stcomplex   = (species == "salmonella" and not use_clonalgroup
+                       and "mlst_st_complex" in df.columns)
 
     # ── Build per-serotype fill counts ────────────────────────────────────────
     if use_klocus:
@@ -324,6 +336,19 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
         fill_label = {l: l for l in fill_vals}
         fill_color = {l: _locus_color(l) for l in fill_vals}
         fill_title = f"{title}  ·  K-locus type (coloured by group)"
+
+    elif use_clonalgroup:
+        raw_cg     = df["sistr_cgmlst_ST"].fillna("Unknown").replace(
+            {"NA": "Unknown", "": "Unknown", "-": "Unknown"})
+        fill_col   = raw_cg
+        top_cg     = [s for s, _ in Counter(raw_cg).most_common(8) if s != "Unknown"]
+        has_other  = len(Counter(raw_cg)) > len(top_cg) + (1 if "Unknown" in Counter(raw_cg) else 0)
+        fill_vals  = top_cg + (["Other"] if has_other else []) + (["Unknown"] if "Unknown" in Counter(raw_cg) else [])
+        cg_pal     = sns.color_palette("husl", len(top_cg))
+        fill_color = {s: cg_pal[i] for i, s in enumerate(top_cg)}
+        fill_color.update({"Other": "#bab0ac", "Unknown": "#d3d3d3"})
+        fill_label = {s: s for s in fill_vals}
+        fill_title = f"{title}  ·  filled by clonal group (cgMLST-ST)"
 
     elif use_stcomplex:
         raw_stc    = df["mlst_st_complex"].fillna("Unknown").replace(
@@ -401,11 +426,16 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
     patches = [mpatches.Patch(facecolor=fill_color.get(fv, "#bab0ac"),
                                label=fill_label.get(fv, fv), linewidth=0)
                for fv in fill_vals if fv in fill_color]
+    if use_klocus:
+        leg_title = "K-locus type"
+    elif use_clonalgroup:
+        leg_title = "Clonal group"
+    else:
+        leg_title = "ST complex"
     ax.legend(handles=patches, fontsize=7, ncol=1,
               bbox_to_anchor=(1.02, 1), loc="upper left",
               frameon=False, handlelength=1.2, handleheight=1.2,
-              title=("K-locus type" if use_klocus else "ST complex"),
-              title_fontsize=7.5)
+              title=leg_title, title_fontsize=7.5)
 
 
 def _parse_gene_classes(val) -> dict[str, str]:

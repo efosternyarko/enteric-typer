@@ -392,21 +392,24 @@ def plot_tree_amr(
     ax_tree.text(0, y_sb - 0.5, f"{sb:.3g}",
                  ha="left", va="bottom", fontsize=6.5)
 
-    # ── Phylogroup strip ──────────────────────────────────────────────────────
+    # ── Phylogroup strip (E. coli only) ──────────────────────────────────────
     seen_pgs: set[str] = set()
-    for i, tip in enumerate(tips):
-        pg  = _tip_phylogroup(tip)
-        col = PHYLOGROUP_COLORS.get(pg, PHYLOGROUP_COLORS["Unknown"])
-        ax_pg.barh(i, 1, color=col, height=1.0, linewidth=0, align="center")
-        seen_pgs.add(pg)
-
-    ax_pg.set_xlim(0, 1)
-    ax_pg.set_ylim(n - 0.5, -0.5)
-    ax_pg.set_yticks([])
-    ax_pg.set_xticks([])
-    ax_pg.set_title("PG", fontsize=7.5, fontweight="bold", pad=3)
-    for sp in ax_pg.spines.values():
-        sp.set_visible(False)
+    if species == "ecoli":
+        for i, tip in enumerate(tips):
+            pg  = _tip_phylogroup(tip)
+            col = PHYLOGROUP_COLORS.get(pg, PHYLOGROUP_COLORS["Unknown"])
+            ax_pg.barh(i, 1, color=col, height=1.0, linewidth=0, align="center")
+            seen_pgs.add(pg)
+        ax_pg.set_xlim(0, 1)
+        ax_pg.set_ylim(n - 0.5, -0.5)
+        ax_pg.set_yticks([])
+        ax_pg.set_xticks([])
+        ax_pg.set_title("PG", fontsize=7.5, fontweight="bold", pad=3)
+        for sp in ax_pg.spines.values():
+            sp.set_visible(False)
+    else:
+        # Hide phylogroup strip for Salmonella
+        ax_pg.set_visible(False)
 
     # ── Virulence heatmap ─────────────────────────────────────────────────────
     # Teal/green palette — distinct from the AMR red
@@ -489,14 +492,14 @@ def plot_tree_amr(
     # Order: Phylogroup swatches, then Virulence present/absent, then AMR present/absent
     legend_handles: list[mpatches.Patch] = []
 
-    # Section 1: Phylogroup
-    pg_title_patch = mpatches.Patch(color="none", label="Phylogroup")
-    legend_handles.append(pg_title_patch)
-    for pg in sorted(seen_pgs):
-        legend_handles.append(
-            mpatches.Patch(facecolor=PHYLOGROUP_COLORS.get(pg, "#bab0ac"),
-                           label=f"  {pg}")
-        )
+    # Section 1: Phylogroup (E. coli only)
+    if species == "ecoli" and seen_pgs:
+        legend_handles.append(mpatches.Patch(color="none", label="Phylogroup"))
+        for pg in sorted(seen_pgs):
+            legend_handles.append(
+                mpatches.Patch(facecolor=PHYLOGROUP_COLORS.get(pg, "#bab0ac"),
+                               label=f"  {pg}")
+            )
 
     # Section 2: Virulence genes (only if panel exists)
     if n_vir:
@@ -520,7 +523,7 @@ def plot_tree_amr(
         handles=legend_handles,
         fontsize=6.5,
         loc="lower left",
-        bbox_to_anchor=(0.0, -0.18),
+        bbox_to_anchor=(0.0, -0.32),
         handlelength=1,
         frameon=True, framealpha=0.88, edgecolor="none",
         labelspacing=0.3,
