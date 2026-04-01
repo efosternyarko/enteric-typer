@@ -1,7 +1,7 @@
-# Vignette: *Escherichia coli* — non-human primate gut isolates, The Gambia (n = 99)
+# Vignette: *Escherichia coli* — non-human primate gut isolates, The Gambia (n = 98)
 
 This vignette demonstrates the outputs produced by **enteric-typer** when run on
-99 *E. coli* genome assemblies from commensal gut isolates recovered from three
+98 *E. coli* genome assemblies from commensal gut isolates recovered from three
 non-human primate (NHP) species in The Gambia.
 
 ---
@@ -29,7 +29,7 @@ Sample names encode the host species prefix, field site code, and individual ID
 
 ### Individual sample accessions
 
-All 99 SRR run accessions are available from BioProject
+All 98 SRR run accessions are available from BioProject
 [PRJNA604701](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA604701).
 A selection of representative accessions is shown below; the full list is
 available in the supplementary data of Foster-Nyarko et al. (2020).

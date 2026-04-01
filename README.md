@@ -515,7 +515,7 @@ Example outputs from two real datasets:
 
 | Dataset | Species | Samples | Vignette |
 |---|---|---|---|
-| NHP gut isolates, The Gambia (Foster-Nyarko et al. 2020) | *Escherichia coli* | 99 | [View vignette](vignettes/ecoli_vignette.md) |
+| NHP gut isolates, The Gambia (Foster-Nyarko et al. 2020) | *Escherichia coli* | 98 | [View vignette](vignettes/ecoli_vignette.md) |
 | Clinical NTS isolates, The Gambia (Darboe et al. 2022) | *Salmonella enterica* | 99 | [View vignette](vignettes/salmonella_vignette.md) |
 
 ---
