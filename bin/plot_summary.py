@@ -201,10 +201,16 @@ def _panel_st(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
     if unk_n:    labels.append("Unknown");  values.append(unk_n)
 
     if is_salmonella:
-        # Plain distinct colours per ST — no phylogroup logic for Salmonella
-        pal = _BOLD_PALETTE + sns.color_palette("husl", max(0, len(labels) - len(_BOLD_PALETTE)))
-        colors = [pal[i % len(pal)] if l not in ("Other", "Unknown") else "#bab0ac"
-                  for i, l in enumerate(labels)]
+        # Single-hue gradient: most frequent ST = deepest, least frequent = lightest
+        n_real = sum(1 for l in labels if l not in ("Other", "Unknown"))
+        cmap = plt.cm.Blues
+        colors = []
+        for i, l in enumerate(labels):
+            if l in ("Other", "Unknown"):
+                colors.append("#bab0ac")
+            else:
+                frac = 0.85 - (i / max(n_real - 1, 1)) * 0.50  # 0.85 (dark) → 0.35 (light)
+                colors.append(cmap(frac))
         title_suffix = ""
         show_pg_legend = False
     else:

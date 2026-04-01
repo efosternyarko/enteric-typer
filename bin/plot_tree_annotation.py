@@ -394,7 +394,7 @@ def plot_tree_amr(
     max_x = max(x for x, _ in pos.values())
     ax_tree.set_ylim(n - 0.5, -0.5)
     ax_tree.set_yticks([])
-    ax_tree.set_xlabel("Substitutions / site", fontsize=8)
+    ax_tree.set_xlabel("")   # scale bar is drawn at top; no bottom x-label needed
     ax_tree.spines["left"].set_visible(False)
     ax_tree.spines["top"].set_visible(False)
     ax_tree.spines["right"].set_visible(False)
@@ -408,13 +408,16 @@ def plot_tree_amr(
     else:
         ax_tree.set_xlim(-max_x * 0.02, max_x * 1.05)
 
-    # Scale bar — bottom-left, text drawn above the bar in data coords
-    # (inverted y-axis: smaller y = higher on screen)
-    sb   = _scale_bar_value(max_x)
-    y_sb = n - 2.5   # well above the very bottom tip; leaves room for x-axis label
-    ax_tree.plot([0, sb], [y_sb, y_sb], color="#333333", lw=1.2, clip_on=False)
-    ax_tree.text(0, y_sb - 0.5, f"{sb:.3g}",
-                 ha="left", va="bottom", fontsize=6.5)
+    # Scale bar — top-left, aligned with adjacent panel titles
+    # Blended transform: x in data units, y in axes fraction (1.0 = top of axes)
+    import matplotlib.transforms as mtransforms
+    sb        = _scale_bar_value(max_x)
+    blended   = mtransforms.blended_transform_factory(ax_tree.transData, ax_tree.transAxes)
+    y_bar     = 1.04   # just above axes top — same level as set_title(pad=3) labels
+    ax_tree.plot([0, sb], [y_bar, y_bar], color="#333333", lw=1.2,
+                 transform=blended, clip_on=False)
+    ax_tree.text(0, y_bar + 0.02, f"{sb:.3g}",
+                 transform=blended, ha="left", va="bottom", fontsize=6.5)
 
     # ── ST strip (all species) ────────────────────────────────────────────────
     for i, st in enumerate(st_vals):
