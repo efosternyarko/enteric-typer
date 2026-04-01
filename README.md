@@ -81,7 +81,7 @@ E. coli   Salmonella   (other species logged and skipped)
 │  from all AMR figures — only acquired genes are plotted.            │
 │                                                                      │
 │  Fig 1: ST distribution · serotypes · AMR drug classes · MDR        │
-│  Fig 2: Core-SNP tree + ST/phylogroup strips + virulence + AMR panel │
+│  Fig 2: Whole-genome SNP tree + ST/phylogroup strips + AMR panel     │
 │  Fig 3: Top acquired AMR genes (intrinsic genes excluded)            │
 │  Fig 4: Plasmid replicon types                                       │
 │  Fig 5: Virulence genes / pathotype (E. coli) or VFDB (Salmonella)  │
@@ -398,6 +398,10 @@ results/
 │     amrfinder_genes            — all raw AMRFinder hits
 │
 ├── {species}_fig1_population_summary.{pdf,png}   ← ST · serotype · AMR drug classes · MDR
+│                                                     ST bars stacked by Clermont phylogroup (E. coli)
+│                                                     Serotype bars stacked by K-locus group (E. coli)
+│                                                     or MLST ST (Salmonella); "Other" bins retain
+│                                                     their fill colours (not collapsed to grey)
 ├── {species}_fig3_amr_genes.{pdf,png}            ← Acquired AMR gene frequencies
 ├── {species}_fig4_plasmid_replicons.{pdf,png}    ← Plasmid replicon types
 ├── {species}_fig5_virulence.{pdf,png}            ← Pathotype / virulence genes
@@ -512,7 +516,7 @@ Example outputs from two real datasets:
 | Dataset | Species | Samples | Vignette |
 |---|---|---|---|
 | NHP gut isolates, The Gambia (Foster-Nyarko et al. 2020) | *Escherichia coli* | 99 | [View vignette](vignettes/ecoli_vignette.md) |
-| Reference genome panel (diverse serovars, NCBI RefSeq) | *Salmonella enterica* | 12 | [View vignette](vignettes/salmonella_vignette.md) |
+| Clinical NTS isolates, The Gambia (Darboe et al. 2022) | *Salmonella enterica* | 99 | [View vignette](vignettes/salmonella_vignette.md) |
 
 ---
 

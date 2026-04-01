@@ -1,41 +1,164 @@
-# Vignette: *Salmonella enterica* — reference genome panel (n = 12)
+# Vignette: *Salmonella enterica* — clinical NTS isolates, The Gambia (n = 99)
 
 This vignette demonstrates the outputs produced by **enteric-typer** when run on
-12 *Salmonella enterica* genome assemblies representing clinically and
-epidemiologically important serovars from diverse lineages.
+99 non-typhoidal *Salmonella enterica* (NTS) clinical isolates from The Gambia.
 
 ---
 
 ## Sample set
 
-Assemblies were sourced from NCBI RefSeq. The panel was designed to span a broad
-range of serovars, sequence types, and pathotypes, including typhoidal (Typhi,
-Paratyphi) and non-typhoidal serovars, as well as host-restricted (Gallinarum)
-and broad-host-range lineages.
+Genomes are from [Darboe et al. (2022) *Microbial Genomics* 8(3):
+mgen000785](https://doi.org/10.1099/mgen.0.000785), a study characterising
+the genomic diversity and antimicrobial resistance of NTS associated with human
+disease in The Gambia. Isolates were recovered from patients attending health
+facilities in both Eastern Gambia (collected 2001) and Western Gambia (collected
+2006–2018), covering invasive disease (bacteraemia) and gastroenteritis.
 
-| Sample | Serovar | MLST ST | ST complex | NCBI Accession |
-|---|---|---|---|---|
-| Salmonella_Choleraesuis_SCB67 | Choleraesuis | ST68 | ST68 complex | [GCF_000008105.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000008105.1/) |
-| Salmonella_Dublin_CT02 | Paratyphi A | ST85 | — | [GCF_000020925.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000020925.1/) |
-| Salmonella_Enteritidis_P125109 | Enteritidis | ST11 | ST11 complex | [GCF_000009505.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000009505.1/) |
-| Salmonella_Gallinarum_28791 | Paratyphi B var. Java | ST307 | — | [GCF_000009525.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000009525.1/) |
-| Salmonella_Heidelberg_SL476 | Heidelberg | ST15 | — | [GCF_000020705.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000020705.1/) |
-| Salmonella_Javiana_CFSAN001992 | Javiana | ST24 | — | [GCF_000341425.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000341425.1/) |
-| Salmonella_Kentucky_CVM29188 | Typhimurium | ST19 | ST19 complex | [GCF_000170195.2](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000170195.2/) |
-| Salmonella_Paratyphi_A_ATCC9150 | Paratyphi C | ST114 | — | [GCF_000011885.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000011885.1/) |
-| Salmonella_Typhi_CT18 | Typhi | ST2 | — | [GCF_000195995.1](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000195995.1/) |
-| Salmonella_Typhimurium_LT2 | Typhimurium | ST19 | ST19 complex | [GCF_000006945.2](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000006945.2/) |
-| Salmonella_Virchow_SL491 | Agona | ST13 | — | [GCF_000171535.2](https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000171535.2/) |
-| Salmonella_Weltevreden_HIN05 | Urbana | — | — | Local collection |
+| Attribute | Detail |
+|---|---|
+| Species | *Salmonella enterica* (non-typhoidal) |
+| Isolates | 99 (from 93 patients; some patients contributed >1 isolate) |
+| Clinical source | Invasive (bacteraemia), gastroenteritis, other sites |
+| Host | Human |
+| Geography | The Gambia, West Africa |
+| Collection period | 2001–2018 |
+| Institution | MRC Unit The Gambia (MRCG) at LSHTM |
+| BioProject | [PRJEB38968](https://www.ncbi.nlm.nih.gov/bioproject/PRJEB38968) (ENA/SRA) |
+| Assemblies | ENA BioSamples [SAMEA6991082–SAMEA6991180](https://www.ebi.ac.uk/ena/browser/view/PRJEB38968) |
+
+### Downloading assemblies from ENA
+
+```bash
+# Download all assemblies for BioProject PRJEB38968 using the ENA FTP
+# (requires ena-ftp-downloader or wget; adjust as needed)
+wget -r -nd -A "*.fasta.gz" \
+    "https://www.ebi.ac.uk/ena/portal/api/filereport?accession=PRJEB38968&result=assembly&fields=submitted_ftp&format=tsv" \
+    -O assembly_urls.tsv
+
+# Or use the ENA browser to bulk-download assemblies:
+# https://www.ebi.ac.uk/ena/browser/view/PRJEB38968
+```
+
+### Sample accessions
+
+All 99 ENA BioSample accessions and their internal LSHTM identifiers (format `NNNN_YY`,
+where `YY` is the 2-digit collection year):
+
+<details>
+<summary>Show all 99 accessions</summary>
+
+| ENA BioSample | LSHTM ID |
+|---|---|
+| SAMEA6991082 | 02958_13 |
+| SAMEA6991083 | 1004_07 |
+| SAMEA6991084 | 1942_14 |
+| SAMEA6991085 | 1820_14 |
+| SAMEA6991086 | 3220_14 |
+| SAMEA6991087 | 12276_11 |
+| SAMEA6991088 | 8080_01 |
+| SAMEA6991089 | 0559_17 |
+| SAMEA6991090 | 1503_08 |
+| SAMEA6991091 | 1521_08 |
+| SAMEA6991092 | 2460_13 |
+| SAMEA6991093 | 4178_15 |
+| SAMEA6991094 | 1142_15 |
+| SAMEA6991095 | 1920_14 |
+| SAMEA6991096 | 3252_14 |
+| SAMEA6991097 | 4289_14 |
+| SAMEA6991098 | 3085_14 |
+| SAMEA6991099 | 1169_07 |
+| SAMEA6991100 | 3332_18 |
+| SAMEA6991101 | 0664_15 |
+| SAMEA6991102 | 1020_09 |
+| SAMEA6991103 | 4278_06 |
+| SAMEA6991104 | 2742_14 |
+| SAMEA6991105 | 4159_15 |
+| SAMEA6991106 | 3541_16 |
+| SAMEA6991107 | 2933_14 |
+| SAMEA6991108 | 1585_17 |
+| SAMEA6991109 | 3653_13 |
+| SAMEA6991110 | 27696_12 |
+| SAMEA6991111 | 4165_15 |
+| SAMEA6991112 | 0525_13 |
+| SAMEA6991113 | 9710_11 |
+| SAMEA6991114 | 0347_07 |
+| SAMEA6991115 | 1967_08 |
+| SAMEA6991116 | 5400_08 |
+| SAMEA6991117 | 1156_08 |
+| SAMEA6991118 | 9063_11 |
+| SAMEA6991119 | 8876_10 |
+| SAMEA6991120 | 0286_09 |
+| SAMEA6991121 | 1221_07 |
+| SAMEA6991122 | 1058_09 |
+| SAMEA6991123 | 1427_09 |
+| SAMEA6991124 | 4585_16 |
+| SAMEA6991125 | 2214_18 |
+| SAMEA6991126 | 0317_13 |
+| SAMEA6991127 | 1076_01 |
+| SAMEA6991128 | 4586_10 |
+| SAMEA6991129 | 0796_06 |
+| SAMEA6991130 | 3183_18 |
+| SAMEA6991131 | 1789_17 |
+| SAMEA6991132 | 3485_17 |
+| SAMEA6991133 | 3610_17 |
+| SAMEA6991134 | 0493_07 |
+| SAMEA6991135 | 0065_14 |
+| SAMEA6991136 | 3625_14 |
+| SAMEA6991137 | 1004_01 |
+| SAMEA6991138 | 0527_01 |
+| SAMEA6991139 | 0008_01 |
+| SAMEA6991140 | 0378_01 |
+| SAMEA6991141 | 8078_01 |
+| SAMEA6991142 | 4025_16 |
+| SAMEA6991143 | 4030_15 |
+| SAMEA6991144 | 4310_15 |
+| SAMEA6991145 | 10136_01 |
+| SAMEA6991146 | 8190_01 |
+| SAMEA6991147 | 10136_02 |
+| SAMEA6991148 | 8729_01 |
+| SAMEA6991149 | 6650_01 |
+| SAMEA6991150 | 9994_11 |
+| SAMEA6991151 | 0851_15 |
+| SAMEA6991152 | 0220_17 |
+| SAMEA6991153 | 5423_17 |
+| SAMEA6991154 | 4589_06 |
+| SAMEA6991155 | 2408_13 |
+| SAMEA6991156 | 1342_06 |
+| SAMEA6991157 | 4273_17 |
+| SAMEA6991158 | 0165_14 |
+| SAMEA6991159 | 0253_01 |
+| SAMEA6991160 | 0176_14 |
+| SAMEA6991161 | 0197_14 |
+| SAMEA6991162 | 4516_14 |
+| SAMEA6991163 | 5797_16 |
+| SAMEA6991164 | 4948_17 |
+| SAMEA6991165 | 1177_07 |
+| SAMEA6991166 | 4519_14 |
+| SAMEA6991167 | 1921_14 |
+| SAMEA6991169 | 1480_02 |
+| SAMEA6991170 | 0189_01 |
+| SAMEA6991171 | 0781_01 |
+| SAMEA6991172 | 2385_01 |
+| SAMEA6991173 | 3009_16 |
+| SAMEA6991174 | 3970_15 |
+| SAMEA6991175 | 8488_01 |
+| SAMEA6991176 | 0123_01 |
+| SAMEA6991177 | 8696_10 |
+| SAMEA6991178 | 3978_17 |
+| SAMEA6991179 | 0171_18 |
+| SAMEA6991180 | 3276_18 |
+| SAMEA9699386 | 0289_15 |
+
+</details>
 
 ---
 
 ## Run command
 
 ```bash
-CONDA_SUBDIR=osx-64 nextflow run main.nf \
-    -profile conda,arm64 \
-    --input_dir test_salmonella_genomes/ \
+nextflow run main.nf \
+    -profile conda \
+    --input_dir gambia_salmonella_assemblies/ \
     --outdir results/
 ```
 
@@ -65,23 +188,22 @@ One row per sample. Key columns:
 
 ### Fig 1 — Population summary
 
-**Figure 1. Population-level summary of 12 *Salmonella enterica* reference genomes.**
-Four panels are shown. **(A)** Sequence type (ST) distribution: horizontal bar chart
-showing the number of isolates per MLST ST (Achtman 7-gene scheme,
-`senterica_achtman_2`). ST19 is the most common, represented by both
-*S*. Typhimurium LT2 and *S*. Kentucky CVM29188.
-**(B)** Serovar distribution coloured by MLST ST: stacked horizontal bar chart
-where each bar represents a serovar predicted by SISTR (Kauffmann-White scheme)
-and fill colours indicate the constituent MLST sequence types, enabling rapid
-assessment of serovar–ST concordance.
+**Figure 1. Population-level summary of 99 clinical non-typhoidal *Salmonella enterica*
+isolates from The Gambia.**
+Four panels are shown. **(A)** Sequence type (ST) distribution: horizontal bar
+chart of MLST STs by count (Achtman 7-gene scheme, `senterica_achtman_2`),
+reflecting the dominant lineages circulating in Gambian NTS disease.
+**(B)** Serovar distribution coloured by MLST sequence type: stacked horizontal
+bar chart where each bar represents a serovar predicted by SISTR and fill colours
+indicate MLST sequence types, enabling rapid assessment of serovar–ST concordance
+and within-serovar lineage diversity.
 **(C)** Acquired AMR drug class prevalence: horizontal bar chart showing the
-proportion of isolates carrying at least one acquired resistance gene in each
-drug class (intrinsic genes classified by AMRrules are excluded). Three isolates
-(*S*. Heidelberg SL476, *S*. Typhi CT18, *S*. Virchow SL491) carry acquired
-resistance, spanning aminoglycosides, β-lactams, phenicols, sulfonamides,
-tetracyclines, and trimethoprim.
-**(D)** Multi-drug resistance (MDR): bar showing the number of isolates with
-acquired resistance to ≥ 3 drug classes.
+proportion of isolates with acquired resistance in each drug class, with
+intrinsic resistance genes excluded (AMRrules classification). Clinically
+important resistance classes (e.g., fluoroquinolones, third-generation
+cephalosporins) are highlighted where present.
+**(D)** Multi-drug resistance (MDR): proportion of isolates with acquired
+resistance to ≥ 3 antibiotic drug classes.
 
 ![Population summary](img/salmonella/salmonella_fig1_population_summary.png)
 
@@ -89,17 +211,20 @@ acquired resistance to ≥ 3 drug classes.
 
 ### Fig 2 — Whole-genome SNP phylogeny with AMR & virulence profiles
 
-**Figure 2. Whole-genome SNP phylogeny of 12 *Salmonella enterica* reference genomes
-annotated with sequence type, virulence, and acquired AMR profiles.**
-The maximum-likelihood tree was inferred by IQ-TREE 2 (ModelFinder Plus automatic
-model selection) from a whole-genome SNP alignment generated by SKA2 (split
-k-mer alignment, k=31) without a reference genome.
-The left-most strip encodes **sequence type (ST)**, with each unique ST shown in a
-distinct colour and a legend below the figure.
-The remaining heatmap columns show **virulence gene presence/absence** (VFDB;
-teal = present, light grey = absent) and **acquired AMR gene presence/absence**
-(red = present, light grey = absent), with gene names labelled along the bottom.
-The scale bar (top left) represents substitutions per site.
+**Figure 2. Whole-genome SNP phylogeny of 99 clinical *Salmonella enterica*
+isolates from The Gambia, annotated with sequence type, virulence, and acquired
+AMR profiles.**
+The maximum-likelihood tree was inferred by IQ-TREE 2 (ModelFinder Plus
+automatic model selection) from a whole-genome SNP alignment generated by SKA2
+(split k-mer alignment, k=31) without a reference genome.
+The left-most strip encodes **sequence type (ST)**, with each unique ST shown in
+a distinct colour and a legend below the figure. The heatmap columns show
+**virulence gene presence/absence** (VFDB; teal = present, light grey = absent)
+and **acquired AMR gene presence/absence** (red = present, light grey = absent),
+with gene names labelled along the bottom. The scale bar (top left) represents
+substitutions per site. Clustering of closely related isolates from the same
+collection period or clinical source reflects the epidemiological structure
+of NTS disease in The Gambia.
 
 ![Phylogeny + AMR](img/salmonella/salmonella_tree_amr.png)
 
@@ -107,16 +232,14 @@ The scale bar (top left) represents substitutions per site.
 
 ### Fig 3 — Acquired AMR genes
 
-**Figure 3. Prevalence of acquired antimicrobial resistance genes across 12
-*Salmonella enterica* reference genomes.**
+**Figure 3. Prevalence of acquired antimicrobial resistance genes across 99
+clinical *Salmonella enterica* isolates from The Gambia.**
 Horizontal bar chart showing the number of isolates carrying each acquired AMR
-gene detected by AMRFinder Plus. Resistance gene classes are grouped and labelled
-along the x-axis. Intrinsic resistance genes (as classified by AMRrules) are
-excluded. Acquired genes include aminoglycoside resistance (*aph(3'')-Ib*,
-*aph(6)-Id*), β-lactamase (*blaTEM-1*), chloramphenicol acetyltransferase
-(*catA1*), dihydrofolate reductase (*dfrA14*), and sulfonamide/tetracycline
-resistance (*sul1*, *sul2*, *tet(B)*), predominantly in *S*. Heidelberg SL476
-and *S*. Typhi CT18.
+gene detected by AMRFinder Plus. Resistance genes are grouped and labelled by
+drug class. Intrinsic resistance genes (as classified by AMRrules) are excluded.
+The pattern of acquired resistance reflects the clinical AMR landscape in
+Gambian NTS, including genes conferring resistance to aminoglycosides,
+β-lactams, sulfonamides, and tetracyclines commonly reported in African NTS.
 
 ![AMR genes](img/salmonella/salmonella_fig3_amr_genes.png)
 
@@ -124,12 +247,12 @@ and *S*. Typhi CT18.
 
 ### Fig 4 — Plasmid replicon types
 
-**Figure 4. Prevalence of plasmid replicon types across 12 *Salmonella enterica*
-reference genomes.**
+**Figure 4. Prevalence of plasmid replicon types across 99 clinical *Salmonella
+enterica* isolates from The Gambia.**
 Horizontal bar chart showing the number of isolates in which each plasmid
 replicon type was detected by PlasmidFinder (Enterobacteriaceae database).
-Replicon prevalence reflects the diversity of plasmid backbones across reference
-strains from distinct serovars and lineages.
+The replicon distribution highlights the mobile genetic element repertoire
+associated with AMR gene carriage in Gambian NTS isolates.
 
 ![Plasmid replicons](img/salmonella/salmonella_fig4_plasmid_replicons.png)
 
@@ -137,17 +260,14 @@ strains from distinct serovars and lineages.
 
 ### Fig 5 — Virulence genes
 
-**Figure 5. Prevalence of virulence factor genes across 12 *Salmonella enterica*
-reference genomes.**
+**Figure 5. Prevalence of virulence factor genes across 99 clinical *Salmonella
+enterica* isolates from The Gambia.**
 Horizontal bar chart showing the number of isolates carrying each virulence gene
 detected by Abricate against the VFDB database. Genes are ordered by prevalence.
-Core virulence factors present in nearly all isolates include Salmonella
-pathogenicity island (SPI) invasion genes (*invA*–*invJ*, *sipA*–*sipD*,
-*spaO*–*spaS*), SPI-2 effector secretion genes (*ssaC*–*ssaV*, *sseA*–*sseL*),
-and regulatory genes (*hilA*, *hilC*, *hilD*, *phoP*, *phoQ*). More variable
-factors — including typhoidal Vi antigen biosynthesis genes (*tviA*–*tviE*,
-*vexA*–*vexE*) and typhoid toxin genes (*cdtB*, *pltA*–*pltC*) — are present
-only in typhoidal serovars (Typhi, Paratyphi A/C).
+Core virulence factors (SPI-1 and SPI-2 invasion and effector secretion genes)
+are expected to be near-universal; variation in accessory virulence factors
+(e.g., adhesins, toxins, iron acquisition systems) reflects the serovar and
+lineage diversity of clinical Gambian NTS.
 
 ![Virulence genes](img/salmonella/salmonella_fig5_virulence.png)
 
@@ -155,14 +275,23 @@ only in typhoidal serovars (Typhi, Paratyphi A/C).
 
 ### Fig 6 — Pairwise whole-genome SNP distance heatmap
 
-**Figure 6. Pairwise whole-genome SNP distance heatmap for 12 *Salmonella enterica*
-reference genomes.**
+**Figure 6. Pairwise whole-genome SNP distance heatmap for 99 clinical
+*Salmonella enterica* isolates from The Gambia.**
 Symmetric heatmap of pairwise SNP distances computed from the SKA2 whole-genome
-SNP alignment. Samples are ordered by hierarchical clustering of the distance
-matrix. Colour intensity encodes SNP distance (lighter = more similar, darker =
-more divergent). Closely related pairs (e.g., *S*. Typhimurium LT2 and
-*S*. Kentucky CVM29188, both ST19) cluster together with low pairwise distances,
-while typhoidal serovars (Typhi, Paratyphi) form a distinct clade reflecting
-their restricted host range and convergent genome reduction.
+SNP alignment. Samples are ordered by hierarchical clustering. Colour intensity
+encodes SNP distance (lighter = more closely related, darker = more divergent).
+Clusters of near-identical isolates may indicate outbreak-related transmissions
+or clonal expansions within the clinical setting.
 
 ![SNP heatmap](img/salmonella/salmonella_snp_heatmap.png)
+
+---
+
+## Reference
+
+Darboe S, Bradbury RS, Phelan J, Kanteh A, Muhammad A-K, Worwui A, Yang S,
+Nwakanma D, Perez-Sepulveda B, Kariuki S, Kwambana-Adams B, Antonio M (2022).
+Genomic diversity and antimicrobial resistance among non-typhoidal Salmonella
+associated with human disease in The Gambia.
+*Microbial Genomics* **8**(3): mgen000785.
+[https://doi.org/10.1099/mgen.0.000785](https://doi.org/10.1099/mgen.0.000785)
