@@ -400,11 +400,16 @@ def plot_tree_amr(
     ax_tree.spines["right"].set_visible(False)
 
     if n <= 60:
+        max_label_len = max((len(t) for t in tips), default=10)
+        # Shrink font for long names (floor at 4 pt)
+        tip_fs = max(4.0, 5.5 - max(0, max_label_len - 20) * 0.07)
+        # Widen right margin: base 1.5× + 4% per character beyond 15
+        xlim_right = max_x * (1.5 + max(0, max_label_len - 15) * 0.04)
         x_label = max_x * 1.04
         for i, tip in enumerate(tips):
-            ax_tree.text(x_label, i, tip, fontsize=5.5,
+            ax_tree.text(x_label, i, tip, fontsize=tip_fs,
                          va="center", ha="left", fontfamily="monospace")
-        ax_tree.set_xlim(-max_x * 0.02, max_x * 1.5)
+        ax_tree.set_xlim(-max_x * 0.02, xlim_right)
     else:
         ax_tree.set_xlim(-max_x * 0.02, max_x * 1.05)
 
