@@ -86,6 +86,9 @@ E. coli   Salmonella   (other species logged and skipped)
 │  Fig 4: Plasmid replicon types                                       │
 │  Fig 5: Virulence genes / pathotype (E. coli) or VFDB (Salmonella)  │
 │  Fig 6: Pairwise whole-genome SNP distance heatmap                   │
+│  Fig 7: AMR drug class prevalence by sequence type (ST)              │
+│  Fig 8: AMR drug class prevalence by serovar (Salmonella) or         │
+│         Clermont phylogroup (E. coli)                                 │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
