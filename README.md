@@ -277,8 +277,8 @@ nextflow run main.nf \
     --outdir    results/ \
     -profile conda
 
-# Apple Silicon Mac (M1/M2/M3/M4) — add arm64 profile
-nextflow run main.nf \
+# Apple Silicon Mac (M1/M2/M3/M4) — prefix CONDA_SUBDIR and add arm64 profile
+CONDA_SUBDIR=osx-64 nextflow run main.nf \
     --input_dir /path/to/assemblies/ \
     --outdir    results/ \
     -profile conda,arm64
@@ -453,21 +453,18 @@ on ARM64 if its full pathotype dependencies are unavailable, but all other tools
 at full capability:
 
 ```bash
-nextflow run main.nf \
+CONDA_SUBDIR=osx-64 nextflow run main.nf \
     --input_dir /path/to/assemblies/ \
     --outdir    results/ \
     -profile conda,arm64
 ```
 
-> This creates conda environments as `osx-64` binaries. You only pay this cost once;
-> environments are cached and reused on subsequent runs.
->
-> If you see a `LibMambaUnsatisfiableError` for `abricate` despite using `-profile conda,arm64`,
-> prepend `CONDA_SUBDIR=osx-64` to the command instead (libmamba on some versions reads
-> the env var rather than the `--platform` flag):
-> ```bash
-> CONDA_SUBDIR=osx-64 nextflow run main.nf --input_dir /path/to/assemblies/ --outdir results/ -profile conda
-> ```
+> **`CONDA_SUBDIR=osx-64` is required** on Apple Silicon. Modern versions of
+> libmamba ignore the `--platform` flag inside Nextflow and fall back to native
+> `osx-arm64`, where some Bioconda packages are unavailable. Prefixing
+> `CONDA_SUBDIR=osx-64` forces Rosetta 2 emulation reliably. You only pay the
+> environment-build cost once; environments are cached and reused on subsequent
+> runs.
 
 ---
 
