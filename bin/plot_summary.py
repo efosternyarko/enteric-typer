@@ -206,6 +206,8 @@ def _panel_st(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
     if other_n:  labels.append("Other");    values.append(other_n)
     if unk_n:    labels.append("Unknown");  values.append(unk_n)
 
+    y = np.arange(len(labels))
+
     if is_salmonella:
         # Single-hue gradient: most frequent ST = deepest, least frequent = lightest
         n_real = sum(1 for l in labels if l not in ("Other", "Unknown"))
@@ -215,42 +217,59 @@ def _panel_st(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
             if l in ("Other", "Unknown"):
                 colors.append("#bab0ac")
             else:
-                frac = 0.85 - (i / max(n_real - 1, 1)) * 0.50  # 0.85 (dark) → 0.35 (light)
+                frac = 0.85 - (i / max(n_real - 1, 1)) * 0.50
                 colors.append(cmap(frac))
+        ax.barh(y, values, color=colors, edgecolor="white", linewidth=0.6, height=0.78)
         title_suffix = ""
         show_pg_legend = False
+
     else:
-        # E. coli: use real Kleborate phylogroup if present; fall back to static ST lookup
+        # E. coli: stacked bars by phylogroup — every bar (including "Other") is
+        # split by the actual phylogroup composition of isolates in that bin.
         has_real_pg = (
             "kleborate_phylogroup" in df.columns and
             df["kleborate_phylogroup"].notna().any() and
             df["kleborate_phylogroup"].astype(str).str.strip().ne("NA").any()
         )
         if has_real_pg:
-            pg_col = df["kleborate_phylogroup"].astype(str).str.strip()
-            pg_col = pg_col.where(~pg_col.isin({"NA", "nan", "None", "-", ""}), "Unknown")
-            st_pg_ctr: dict[str, Counter] = {}
-            for st, pg in zip(sts, pg_col):
-                st_pg_ctr.setdefault(st, Counter())[pg] += 1
-            st_pg_map = {st: ctr.most_common(1)[0][0] for st, ctr in st_pg_ctr.items()}
+            pg_series = df["kleborate_phylogroup"].astype(str).str.strip()
+            pg_series = pg_series.where(
+                ~pg_series.isin({"NA", "nan", "None", "-", ""}), "Unknown")
             title_suffix = " (Clermont)"
         else:
-            st_pg_map = {}
+            pg_series = sts.apply(get_phylogroup)
             title_suffix = " (ST-inferred)"
 
-        def _pg_for(lbl: str) -> str:
-            if lbl in ("Other", "Unknown"):
-                return lbl
-            if has_real_pg:
-                return st_pg_map.get(lbl, "Unknown")
-            return get_phylogroup(lbl)
+        # Accumulate phylogroup counts per display label (individual ST, "Other", "Unknown")
+        top_st_set = set(dict(top).keys())
+        label_pg_counts: dict[str, Counter] = {}
+        for st_val, pg_val in zip(sts, pg_series):
+            if st_val == "Unknown":
+                lbl = "Unknown"
+            elif st_val in top_st_set:
+                lbl = st_val
+            else:
+                lbl = "Other"
+            label_pg_counts.setdefault(lbl, Counter())[pg_val] += 1
 
-        colors = [PHYLOGROUP_COLORS.get(_pg_for(l), PHYLOGROUP_COLORS["Unknown"])
-                  for l in labels]
+        # Draw stacked horizontal bars — each segment = one phylogroup
+        pg_order = list(PHYLOGROUP_COLORS.keys())
+        seen_pg: dict[str, str] = {}
+        for y_idx, lbl in enumerate(labels):
+            x = 0
+            pg_ctr = label_pg_counts.get(lbl, Counter())
+            # Sort segments by canonical phylogroup order for visual consistency
+            for pg in sorted(pg_ctr.keys(),
+                             key=lambda p: pg_order.index(p) if p in pg_order else 99):
+                cnt = pg_ctr[pg]
+                color = PHYLOGROUP_COLORS.get(pg, PHYLOGROUP_COLORS["Unknown"])
+                ax.barh(y_idx, cnt, left=x, height=0.78,
+                        color=color, edgecolor="white", linewidth=0.6)
+                seen_pg.setdefault(pg, color)
+                x += cnt
+
         show_pg_legend = True
 
-    y = np.arange(len(labels))
-    ax.barh(y, values, color=colors, edgecolor="white", linewidth=0.6, height=0.78)
     ax.set_yticks(y); ax.set_yticklabels(labels, fontsize=8)
     ax.invert_yaxis()
     ax.set_xlabel("Number of isolates", fontsize=8.5)
@@ -263,12 +282,8 @@ def _panel_st(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
     ax.yaxis.set_ticks_position("none")
 
     if show_pg_legend:
-        # Phylogroup legend — outside, right (E. coli only)
-        seen: dict[str, str] = {}
-        for lbl in labels:
-            pg = _pg_for(lbl)
-            seen.setdefault(pg, PHYLOGROUP_COLORS.get(_pg_for(lbl), PHYLOGROUP_COLORS["Unknown"]))
-        patches = [mpatches.Patch(facecolor=c, label=pg, linewidth=0) for pg, c in seen.items()]
+        patches = [mpatches.Patch(facecolor=c, label=pg, linewidth=0)
+                   for pg, c in seen_pg.items()]
         ax.legend(handles=patches, title="Phylogroup", fontsize=7, title_fontsize=7.5,
                   bbox_to_anchor=(1.02, 1), loc="upper left",
                   frameon=False, handlelength=1.2, handleheight=1.2)
@@ -325,7 +340,7 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
     if use_klocus:
         raw_klocus = df["k_locus"].fillna("Unknown").replace(
             {"NA": "Unknown", "": "Unknown", "-": "Unknown"})
-        # Build locus → group mapping for colour assignment
+        # Build locus → group mapping (used for legend and colour lookup)
         locus_grp: dict[str, str] = {}
         if "k_group" in df.columns:
             for locus, grp in zip(raw_klocus,
@@ -335,20 +350,22 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
         locus_freq = Counter(raw_klocus)
         top_loci   = [l for l, _ in locus_freq.most_common(12) if l != "Unknown"]
         has_other  = any(l not in top_loci and l != "Unknown" for l in locus_freq)
-        fill_vals  = top_loci
-        if has_other:              fill_vals = fill_vals + ["Other"]
-        if "Unknown" in locus_freq: fill_vals = fill_vals + ["Unknown"]
-        fill_col   = raw_klocus.apply(
-            lambda l: l if l in top_loci
-                      else ("Unknown" if l == "Unknown" else "Other"))
 
-        def _locus_color(locus: str) -> str:
-            if locus in ("Other", "Unknown"):
-                return KGROUP_COLORS.get(locus, "#bab0ac")
-            return KGROUP_COLORS.get(locus_grp.get(locus, "Unknown"), "#bab0ac")
-
-        fill_label = {l: l for l in fill_vals}
-        fill_color = {l: _locus_color(l) for l in fill_vals}
+        # Fill bars by K-group (not individual locus) so that rare K-loci
+        # still receive their proper group colour rather than collapsing to
+        # a grey "Other" segment.
+        if "k_group" in df.columns:
+            raw_kgroup = df["k_group"].fillna("Unknown").replace(
+                {"NA": "Unknown", "": "Unknown", "-": "Unknown"})
+        else:
+            raw_kgroup = raw_klocus.apply(lambda l: locus_grp.get(str(l), "Unknown"))
+        grp_freq  = Counter(raw_kgroup)
+        fill_vals = [g for g in KGROUP_ORDER if g in grp_freq and g != "Unknown"]
+        if "Unknown" in grp_freq:
+            fill_vals = fill_vals + ["Unknown"]
+        fill_col   = raw_kgroup
+        fill_color = {g: KGROUP_COLORS.get(g, "#bab0ac") for g in fill_vals}
+        fill_label = {g: g for g in fill_vals}
         fill_title = f"{title}  ·  K-locus type (coloured by group)"
 
     elif use_mlst_st:
@@ -456,20 +473,13 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
     # rare loci were collapsed into the "Other" bar segment.
     if use_klocus:
         ax.add_artist(locus_leg)   # keep the first legend when adding a second
-        seen_groups: set[str] = set()
-        for locus in top_loci:
-            grp = locus_grp.get(locus, "Unknown")
-            if grp in KGROUP_COLORS and grp not in ("Unknown",):
-                seen_groups.add(grp)
+        # Show all K-groups present in fill_vals (bars are stacked by group,
+        # so every group colour actually appears in the chart)
         group_patches = [
             mpatches.Patch(facecolor=KGROUP_COLORS[g], label=g, linewidth=0)
             for g in ["G1", "G2", "G3", "G4", "G1/G4", "G2/G3"]
-            if g in seen_groups
+            if g in fill_vals
         ]
-        if has_other:
-            group_patches.append(
-                mpatches.Patch(facecolor="#bab0ac", label="Other (rare K-loci)", linewidth=0)
-            )
         if group_patches:
             ax.legend(handles=group_patches, fontsize=7, ncol=1,
                       bbox_to_anchor=(1.02, 0), loc="lower left",
