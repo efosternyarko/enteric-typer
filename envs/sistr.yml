@@ -5,5 +5,5 @@ channels:
   - defaults
 dependencies:
   - sistr_cmd=1.1.2
-  - blast
+  - blast=2.14.*   # BLAST 2.15+ output format breaks SISTR 1.1.2 parser
   - setuptools<71  # pkg_resources bundled in setuptools <71; removed in newer builds
