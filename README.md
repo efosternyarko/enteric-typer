@@ -361,6 +361,22 @@ results/
 
 ---
 
+## Cleaning up after a run
+
+All final outputs are written to `--outdir` (default: `results/`). Once you are
+happy with the results you can free up disk space by removing Nextflow's
+temporary files:
+
+```bash
+rm -rf work/ .nextflow/ .nextflow.log*
+```
+
+> **Tip:** keep `work/` if you want to use `-resume` to rerun with different
+> parameters without repeating completed steps. Delete it only when the run is
+> finalised.
+
+---
+
 ## Optional: install Graphviz
 
 Nextflow generates an execution DAG diagram (`pipeline_info/dag.svg`) which
