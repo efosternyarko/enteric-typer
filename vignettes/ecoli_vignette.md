@@ -178,6 +178,35 @@ study.
 
 ---
 
+### Fig 7 — AMR drug class prevalence by sequence type
+
+**Figure 7. AMR drug class prevalence by MLST sequence type (ST) across 98
+*Escherichia coli* NHP isolates.**
+Tile heatmap showing the percentage of isolates within each ST carrying acquired
+resistance to each drug class, as detected by AMRFinder Plus. Rows represent
+the most common STs (Achtman 7-gene scheme), sorted by isolate count; columns
+represent drug classes sorted by overall prevalence. Cell colour encodes
+percentage: grey = 0 %; cream through orange to dark red = low to high
+prevalence; purple = 100 %. Percentage values are shown inside each cell.
+Intrinsic resistance genes and efflux-associated classes are excluded.
+
+![AMR by ST](img/ecoli/ecoli_fig7_amr_by_st.png)
+
+---
+
+### Fig 8 — AMR drug class prevalence by Clermont phylogroup
+
+**Figure 8. AMR drug class prevalence by Clermont phylogroup across 98
+*Escherichia coli* NHP isolates.**
+Tile heatmap showing the percentage of isolates within each Clermont phylogroup
+carrying acquired resistance to each drug class. Rows represent phylogroups
+(assigned by Kleborate) sorted by isolate count; columns represent drug classes
+sorted by overall prevalence. Colour and label encoding are identical to Fig 7.
+
+![AMR by phylogroup](img/ecoli/ecoli_fig8_amr_by_phylogroup.png)
+
+---
+
 ## Reference
 
 Foster-Nyarko E, Alikhan N-F, Ravi A, Thilliez G, Thomson NM, Baker D, Kay G,

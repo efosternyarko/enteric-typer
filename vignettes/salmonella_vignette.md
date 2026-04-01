@@ -290,6 +290,35 @@ or clonal expansions within the clinical setting.
 
 ---
 
+### Fig 7 — AMR drug class prevalence by sequence type
+
+**Figure 7. AMR drug class prevalence by MLST sequence type (ST) across 99 clinical
+*Salmonella enterica* isolates from The Gambia.**
+Tile heatmap showing the percentage of isolates within each ST carrying acquired
+resistance to each drug class, as detected by AMRFinder Plus. Rows represent
+the most common STs (Achtman 7-gene scheme), sorted by isolate count; columns
+represent drug classes sorted by overall prevalence. Cell colour encodes
+percentage: grey = 0 %; cream through orange to dark red = low to high
+prevalence; purple = 100 %. Percentage values are shown inside each cell.
+Intrinsic resistance genes are excluded.
+
+![AMR by ST](img/salmonella/salmonella_fig7_amr_by_st.png)
+
+---
+
+### Fig 8 — AMR drug class prevalence by serovar
+
+**Figure 8. AMR drug class prevalence by serovar across 99 clinical
+*Salmonella enterica* isolates from The Gambia.**
+Tile heatmap showing the percentage of isolates within each SISTR-predicted
+serovar carrying acquired resistance to each drug class. Rows represent the
+most common serovars sorted by isolate count; columns represent drug classes
+sorted by overall prevalence. Colour and label encoding are identical to Fig 7.
+
+![AMR by serovar](img/salmonella/salmonella_fig8_amr_by_serovar.png)
+
+---
+
 ## Reference
 
 Darboe S, Bradbury RS, Phelan J, Kanteh A, Muhammad A-K, Worwui A, Yang S,
