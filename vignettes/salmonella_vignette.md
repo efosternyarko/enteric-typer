@@ -195,8 +195,11 @@ chart of MLST STs by count (Achtman 7-gene scheme, `senterica_achtman_2`),
 reflecting the dominant lineages circulating in Gambian NTS disease.
 **(B)** Serovar distribution coloured by MLST sequence type: stacked horizontal
 bar chart where each bar represents a serovar predicted by SISTR and fill colours
-indicate MLST sequence types, enabling rapid assessment of serovar–ST concordance
-and within-serovar lineage diversity.
+indicate MLST sequence types (up to the top 12 STs are shown individually;
+remaining STs are grouped as "Other" and isolates with no ST call as "Unknown").
+Bars retain the ST colours of their constituent isolates even when the serovar
+itself falls into the "Other / Unknown" bin, enabling rapid assessment of
+serovar–ST concordance and within-serovar lineage diversity.
 **(C)** Acquired AMR drug class prevalence: horizontal bar chart showing the
 proportion of isolates with acquired resistance in each drug class, with
 intrinsic resistance genes excluded (AMRrules classification). Clinically

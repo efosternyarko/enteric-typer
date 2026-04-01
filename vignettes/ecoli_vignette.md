@@ -84,7 +84,7 @@ One row per sample. Key columns:
 
 ### Fig 1 — Population summary
 
-**Figure 1. Population-level summary of 99 *Escherichia coli* isolates from
+**Figure 1. Population-level summary of 98 *Escherichia coli* isolates from
 non-human primate gut microbiomes in The Gambia.**
 Four panels are shown. **(A)** Sequence type (ST) distribution: horizontal bar
 chart of the top sequence types by count (Achtman 7-gene scheme). Commensal
@@ -93,8 +93,10 @@ phylogenetic diversity typical of gut commensals.
 **(B)** O:H serotype distribution coloured by K-locus group: stacked horizontal
 bar chart where each bar represents a serotype (ECTyper) and fill colours
 indicate the K-locus group — purple for G1/G4, orange for G2/G3 — enabling
-rapid assessment of the K-locus landscape across circulating serotypes. A
-secondary legend shows individual K-locus types within each group.
+rapid assessment of the K-locus landscape across circulating serotypes.
+Serotypes not in the top 15 are grouped as "Other / Unknown"; bars retain the
+K-locus group colours of their constituent isolates. A secondary legend shows
+individual K-locus types within each group.
 **(C)** Acquired AMR drug class prevalence: horizontal bar chart showing the
 proportion of isolates carrying at least one acquired resistance gene per drug
 class, with intrinsic resistance genes excluded.
@@ -107,7 +109,7 @@ acquired resistance to ≥ 3 antibiotic classes.
 
 ### Fig 2 — Whole-genome SNP phylogeny with AMR & virulence profiles
 
-**Figure 2. Whole-genome SNP phylogeny of 99 *Escherichia coli* NHP isolates
+**Figure 2. Whole-genome SNP phylogeny of 98 *Escherichia coli* NHP isolates
 annotated with sequence type, Clermont phylogroup, virulence, and acquired AMR
 profiles.**
 The maximum-likelihood tree was inferred by IQ-TREE 2 (ModelFinder Plus
@@ -126,7 +128,7 @@ bar (top left) represents substitutions per site.
 
 ### Fig 3 — Acquired AMR genes
 
-**Figure 3. Prevalence of acquired antimicrobial resistance genes across 99
+**Figure 3. Prevalence of acquired antimicrobial resistance genes across 98
 *Escherichia coli* NHP isolates.**
 Horizontal bar chart showing the number of isolates carrying each acquired AMR
 gene detected by AMRFinder Plus. Resistance genes are grouped and labelled by
@@ -140,12 +142,7 @@ is consistent with the commensal, non-clinical source of these isolates.
 
 ### Fig 4 — Plasmid replicon types
 
-**Figure 4. Prevalence of plasmid replicon types across 99 *Escherichia coli*
-NHP isolates.**
-Horizontal bar chart showing the number of isolates in which each replicon type
-was detected by PlasmidFinder (Enterobacteriaceae database). The distribution of
-replicon families reflects the diversity of mobile genetic elements circulating
-in commensal *E. coli* from NHP gut microbiomes.
+No plasmid replicons were detected in this dataset.
 
 ![Plasmid replicons](img/ecoli/ecoli_fig4_plasmid_replicons.png)
 
@@ -153,7 +150,7 @@ in commensal *E. coli* from NHP gut microbiomes.
 
 ### Fig 5 — Virulence genes
 
-**Figure 5. Prevalence of virulence factor genes across 99 *Escherichia coli*
+**Figure 5. Prevalence of virulence factor genes across 98 *Escherichia coli*
 NHP isolates.**
 Horizontal bar chart showing the number of isolates carrying each virulence gene
 detected by AMRFinder Plus (virulence gene module). Genes are ordered by
@@ -168,7 +165,7 @@ from the original study (Foster-Nyarko et al. 2020), which noted that NHP
 
 ### Fig 6 — Pairwise whole-genome SNP distance heatmap
 
-**Figure 6. Pairwise whole-genome SNP distance heatmap for 99 *Escherichia coli*
+**Figure 6. Pairwise whole-genome SNP distance heatmap for 98 *Escherichia coli*
 NHP isolates.**
 Symmetric heatmap of pairwise SNP distances computed from the SKA2 whole-genome
 SNP alignment. Samples are ordered by hierarchical clustering. Colour intensity

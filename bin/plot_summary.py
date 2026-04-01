@@ -182,7 +182,7 @@ def fig_population_summary(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     _panel_sero(df, fig.add_subplot(gs[0, 1]))
     _panel_amr(df,  fig.add_subplot(gs[1, 0]))
     _panel_mdr(df,  fig.add_subplot(gs[1, 1]))
-    sp_label = ("Salmonella enterica" if "salmonella" in prefix.lower()
+    sp_label = ("Salmonella enterica" if ("sistr_serovar" in df.columns or "salmonella" in prefix.lower())
                 else "E. coli")
     fig.suptitle(f"{sp_label} genomic surveillance summary  (n = {len(df)} isolates)",
                  fontsize=12, fontweight="bold", y=1.01)
@@ -371,7 +371,7 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
     elif use_mlst_st:
         raw_st     = df["mlst_st"].apply(clean_st)
         fill_col   = raw_st
-        top_st     = [s for s, _ in Counter(raw_st).most_common(8) if s != "Unknown"]
+        top_st     = [s for s, _ in Counter(raw_st).most_common(12) if s != "Unknown"]
         has_other  = len(Counter(raw_st)) > len(top_st) + (1 if "Unknown" in Counter(raw_st) else 0)
         fill_vals  = top_st + (["Other"] if has_other else []) + (["Unknown"] if "Unknown" in Counter(raw_st) else [])
         st_pal     = sns.color_palette("husl", len(top_st))
@@ -418,7 +418,7 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
         # Normalise fill value to known categories
         valid = set(fill_vals)
         if fv not in valid:
-            fv = "Other" if use_stcomplex else "Unknown"
+            fv = "Other" if "Other" in valid else "Unknown"
 
         # Bin serotype into labelled buckets
         if sv in labels:
