@@ -93,7 +93,8 @@ E. coli   Salmonella   (other species logged and skipped)
 > Assemblies are first typed against the **G2/G3 database** (`EC-K-typing_group2and3_v3.0.0.gbk`;
 > [Gladstone et al. 2026](https://www.nature.com/articles/s41564-026-02283-w)).
 > Samples that remain untypeable are then re-typed against the **G1/G4 database**
-> ([Foster-Nyarko et al.](https://github.com/efosternyarko/EC-K-typing-G1G4)).
+> (`EC-K-typing_group1and4_v1.2.gbk`;
+> [Foster-Nyarko et al.](https://github.com/efosternyarko/EC-K-typing-G1G4)).
 > G2/G3 and G1/G4 loci are mutually exclusive in *E. coli*, so sequential typing
 > ensures each sample is assigned to the correct group without double-counting.
 
