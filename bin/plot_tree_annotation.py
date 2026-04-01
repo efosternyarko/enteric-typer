@@ -167,6 +167,12 @@ def _clean_st(raw) -> str:
     s = str(raw).strip() if pd.notna(raw) else ""
     if s in ("", "-", "NA", "nan", "None", "No ST predicted"):
         return "Unknown"
+    # Strip float artifact written by pandas (e.g. "68.0" → "68")
+    if "." in s:
+        try:
+            s = str(int(float(s)))
+        except ValueError:
+            pass
     return s if s.startswith("ST") else f"ST{s}"
 
 
@@ -561,7 +567,7 @@ def plot_tree_amr(
             handles=left_handles,
             fontsize=6.5,
             loc="lower left",
-            bbox_to_anchor=(0.0, -0.22),
+            bbox_to_anchor=(0.0, -0.32),
             handlelength=1,
             frameon=True, framealpha=0.88, edgecolor="none",
             labelspacing=0.3,
@@ -591,7 +597,7 @@ def plot_tree_amr(
     # ── Title ─────────────────────────────────────────────────────────────────
     sp_label = "E. coli" if species == "ecoli" else "Salmonella enterica"
     fig.suptitle(
-        f"{sp_label} core-SNP phylogeny with virulence & AMR profiles  (n = {n} isolates)",
+        f"{sp_label} whole-genome SNP phylogeny with virulence & AMR profiles  (n = {n} isolates)",
         fontsize=11, fontweight="bold", y=1.01,
     )
 

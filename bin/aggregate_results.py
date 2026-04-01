@@ -236,9 +236,9 @@ def load_sistr(files: list[str]) -> dict[str, dict]:
                     "sistr_serovar":         _na(row.get("serovar")),
                     "sistr_serovar_antigen": _na(row.get("serovar_antigen")),
                     "sistr_serovar_cgmlst":  _na(row.get("serovar_cgmlst")),
-                    "sistr_O":               _na(row.get("O_antigen")),
-                    "sistr_H1":              _na(row.get("H1")),
-                    "sistr_H2":              _na(row.get("H2")),
+                    "sistr_O":               _na(row.get("o_antigen")),
+                    "sistr_H1":              _na(row.get("h1")),
+                    "sistr_H2":              _na(row.get("h2")),
                     "sistr_cgmlst_ST":       _na(row.get("cgmlst_ST")),
                     "sistr_qc":              _na(row.get("qc_status")),
                 }

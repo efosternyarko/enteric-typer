@@ -107,7 +107,7 @@ def plot_snp_heatmap(matrix_path: str, species_label: str, outdir: str) -> None:
         ax.set_xlabel(f"{n} samples (labels hidden at this scale)", fontsize=9)
 
     sp_display = "E. coli" if species_label == "ecoli" else "Salmonella enterica"
-    ax.set_title(f"Pairwise core-SNP distances — {sp_display}", fontsize=11, pad=8)
+    ax.set_title(f"Pairwise whole-genome SNP distances — {sp_display}", fontsize=11, pad=8)
 
     cbar = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
     cbar.set_label("Pairwise SNP distance", fontsize=9)

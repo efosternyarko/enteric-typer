@@ -19,18 +19,19 @@ process SISTR {
     script:
     """
     sistr \\
-        --input-fasta   ${fasta} \\
+        --input-fasta   ${fasta} ${sample_id} \\
         --output-format tab \\
-        --output-prediction ${sample_id}_sistr_raw.tsv \\
+        --output-prediction ${sample_id}_sistr_raw \\
         --threads       ${task.cpus} \\
         --qc \\
         2>${sample_id}_sistr.log \\
     || true
 
+    # SISTR appends the format extension, so tab output lands in _sistr_raw.tab
     # Add a sample column for aggregation
-    if [ -f "${sample_id}_sistr_raw.tsv" ] && [ \$(wc -l < "${sample_id}_sistr_raw.tsv") -gt 1 ]; then
+    if [ -f "${sample_id}_sistr_raw.tab" ] && [ \$(wc -l < "${sample_id}_sistr_raw.tab") -gt 1 ]; then
         awk -v s="${sample_id}" 'NR==1 {print "sample\\t" \$0; next} {print s "\\t" \$0}' \\
-            "${sample_id}_sistr_raw.tsv" > "${sample_id}_sistr.tsv"
+            "${sample_id}_sistr_raw.tab" > "${sample_id}_sistr.tsv"
     else
         echo -e "sample\\tgenome\\tserovar\\tserovar_antigen\\tserovar_cgmlst\\tO_antigen\\tH1\\tH2\\tqc_status\\tcgmlst_ST" \\
             > "${sample_id}_sistr.tsv"

@@ -2,7 +2,7 @@
 
 A species-gated genotyping workflow for enteric pathogens. Given a folder of
 genome assemblies, the pipeline speciates each sample and deploys the
-appropriate species-specific typing tools, generates a core-SNP phylogeny, and
+appropriate species-specific typing tools, generates a whole-genome SNP phylogeny, and
 produces publication-ready summary figures.
 
 ## Supported species
@@ -58,7 +58,7 @@ E. coli   Salmonella   (other species logged and skipped)
 ┌─────────────────────────────────────────────────────────────────┐
 │  3. PHYLOGENETICS  (per species, ≥ 3 samples; skip with         │
 │                    --skip_local_phylo)                          │
-│  SKA2 build (k=31) → core-SNP alignment + SNP distance matrix  │
+│  SKA2 build (k=31) → whole-genome SNP alignment + SNP distance matrix  │
 │  → IQ-TREE ML tree (ModelFinder Plus automatic model selection) │
 └─────────────────────────────────────────────────────────────────┘
         │
@@ -85,13 +85,21 @@ E. coli   Salmonella   (other species logged and skipped)
 │  Fig 3: Top acquired AMR genes (intrinsic genes excluded)            │
 │  Fig 4: Plasmid replicon types                                       │
 │  Fig 5: Virulence genes / pathotype (E. coli) or VFDB (Salmonella)  │
-│  Fig 6: Pairwise core-SNP distance heatmap                           │
+│  Fig 6: Pairwise whole-genome SNP distance heatmap                   │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-> **Phylogenetics (SKA2 + IQ-TREE):** core-SNP phylogenies are built using
+> **E. coli K-locus typing (Kaptive):** K-locus typing uses two curated databases run sequentially.
+> Assemblies are first typed against the **G2/G3 database** (`EC-K-typing_group2and3_v3.0.0.gbk`;
+> [Gladstone et al. 2026](https://www.nature.com/articles/s41564-026-02283-w)).
+> Samples that remain untypeable are then re-typed against the **G1/G4 database**
+> ([Foster-Nyarko et al.](https://github.com/efosternyarko/EC-K-typing-G1G4)).
+> G2/G3 and G1/G4 loci are mutually exclusive in *E. coli*, so sequential typing
+> ensures each sample is assigned to the correct group without double-counting.
+
+> **Phylogenetics (SKA2 + IQ-TREE):** whole-genome SNP phylogenies are built using
 > [SKA2](https://github.com/bacpop/ska.rust) (split k-mer alignment, k=31),
-> which aligns assemblies without a reference genome and produces a core-SNP
+> which aligns assemblies without a reference genome and produces a genome-wide SNP
 > alignment and pairwise SNP distance matrix. The alignment is then passed to
 > IQ-TREE 2 for maximum-likelihood tree inference with automatic model
 > selection (ModelFinder Plus). Phylogenetics runs per species when ≥ 3
@@ -368,8 +376,8 @@ results/
 │   └── *_plasmidfinder.tsv
 │
 ├── ska2_ecoli/
-│   ├── ska2_alignment.fasta       ← core-SNP alignment (input to IQ-TREE)
-│   └── snp_matrix.tsv             ← pairwise core-SNP distance matrix
+│   ├── ska2_alignment.fasta       ← whole-genome SNP alignment (input to IQ-TREE)
+│   └── snp_matrix.tsv             ← pairwise whole-genome SNP distance matrix
 ├── iqtree_ecoli/
 │   ├── iqtree.treefile             ← Newick ML tree
 │   └── iqtree.iqtree               ← IQ-TREE log + best-fit model
@@ -393,7 +401,7 @@ results/
 ├── {species}_fig4_plasmid_replicons.{pdf,png}    ← Plasmid replicon types
 ├── {species}_fig5_virulence.{pdf,png}            ← Pathotype / virulence genes
 ├── {species}_tree_amr.{pdf,png}                  ← Phylogeny + phylogroup + AMR heatmaps
-└── {species}_snp_heatmap.{pdf,png}               ← Pairwise core-SNP distance heatmap
+└── {species}_snp_heatmap.{pdf,png}               ← Pairwise whole-genome SNP distance heatmap
 ```
 
 ---
@@ -512,6 +520,8 @@ And the tools it wraps:
 - **SISTR**: Yoshida et al. (2016) PLOS ONE 11(1):e0147101
 - **PlasmidFinder**: Carattoli et al. (2014) Antimicrobial Agents and Chemotherapy
 - **Kaptive**: Wyres et al. (2016) Microbial Genomics 2(10); Lam et al. (2022) Nature Protocols
+- **EC K-typing G2/G3**: Gladstone et al. (2026) Nature Microbiology; github.com/rgladstone/EC-K-typing
+- **EC K-typing G1/G4**: Foster-Nyarko E et al. github.com/efosternyarko/EC-K-typing-G1G4
 - **Kleborate**: Lam et al. (2021) Nature Communications; github.com/klebgenomics/Kleborate
 - **Abricate**: github.com/tseemann/abricate
 - **SKA2**: github.com/bacpop/ska.rust

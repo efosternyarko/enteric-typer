@@ -131,6 +131,12 @@ def clean_st(st) -> str:
     s = str(st).strip() if pd.notna(st) else ""
     if s in ("", "-", "NA", "nan", "No ST predicted"):
         return "Unknown"
+    # Strip float artifact written by pandas (e.g. "68.0" → "68")
+    if "." in s:
+        try:
+            s = str(int(float(s)))
+        except ValueError:
+            pass
     return s if s.startswith("ST") else f"ST{s}"
 
 
@@ -310,10 +316,10 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
         labels.append("Other / Unknown")
 
     # ── Decide fill strategy ──────────────────────────────────────────────────
-    use_klocus      = (species == "ecoli"      and "k_locus"          in df.columns)
-    use_clonalgroup = (species == "salmonella" and "sistr_cgmlst_ST"  in df.columns)
-    use_stcomplex   = (species == "salmonella" and not use_clonalgroup
-                       and "mlst_st_complex" in df.columns)
+    use_klocus    = (species == "ecoli"      and "k_locus"   in df.columns)
+    use_mlst_st   = (species == "salmonella" and "mlst_st"   in df.columns)
+    use_stcomplex = (species == "salmonella" and not use_mlst_st
+                     and "mlst_st_complex" in df.columns)
 
     # ── Build per-serotype fill counts ────────────────────────────────────────
     if use_klocus:
@@ -345,18 +351,17 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
         fill_color = {l: _locus_color(l) for l in fill_vals}
         fill_title = f"{title}  ·  K-locus type (coloured by group)"
 
-    elif use_clonalgroup:
-        raw_cg     = df["sistr_cgmlst_ST"].fillna("Unknown").replace(
-            {"NA": "Unknown", "": "Unknown", "-": "Unknown"})
-        fill_col   = raw_cg
-        top_cg     = [s for s, _ in Counter(raw_cg).most_common(8) if s != "Unknown"]
-        has_other  = len(Counter(raw_cg)) > len(top_cg) + (1 if "Unknown" in Counter(raw_cg) else 0)
-        fill_vals  = top_cg + (["Other"] if has_other else []) + (["Unknown"] if "Unknown" in Counter(raw_cg) else [])
-        cg_pal     = sns.color_palette("husl", len(top_cg))
-        fill_color = {s: cg_pal[i] for i, s in enumerate(top_cg)}
+    elif use_mlst_st:
+        raw_st     = df["mlst_st"].apply(clean_st)
+        fill_col   = raw_st
+        top_st     = [s for s, _ in Counter(raw_st).most_common(8) if s != "Unknown"]
+        has_other  = len(Counter(raw_st)) > len(top_st) + (1 if "Unknown" in Counter(raw_st) else 0)
+        fill_vals  = top_st + (["Other"] if has_other else []) + (["Unknown"] if "Unknown" in Counter(raw_st) else [])
+        st_pal     = sns.color_palette("husl", len(top_st))
+        fill_color = {s: st_pal[i] for i, s in enumerate(top_st)}
         fill_color.update({"Other": "#bab0ac", "Unknown": "#d3d3d3"})
         fill_label = {s: s for s in fill_vals}
-        fill_title = f"{title}  ·  filled by clonal group (cgMLST-ST)"
+        fill_title = f"{title}  ·  filled by sequence type (MLST)"
 
     elif use_stcomplex:
         raw_stc    = df["mlst_st_complex"].fillna("Unknown").replace(
@@ -436,8 +441,8 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
                for fv in fill_vals if fv in fill_color]
     if use_klocus:
         leg_title = "K-locus type"
-    elif use_clonalgroup:
-        leg_title = "Clonal group"
+    elif use_mlst_st:
+        leg_title = "Sequence type"
     else:
         leg_title = "ST complex"
 
@@ -447,16 +452,29 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
                           title=leg_title, title_fontsize=7.5)
 
     # K-locus group colour key — second legend below the locus legend
+    # Only include groups actually observed in the top loci; add "Other" entry if
+    # rare loci were collapsed into the "Other" bar segment.
     if use_klocus:
         ax.add_artist(locus_leg)   # keep the first legend when adding a second
+        seen_groups: set[str] = set()
+        for locus in top_loci:
+            grp = locus_grp.get(locus, "Unknown")
+            if grp in KGROUP_COLORS and grp not in ("Unknown",):
+                seen_groups.add(grp)
         group_patches = [
-            mpatches.Patch(facecolor=KGROUP_COLORS["G1/G4"], label="G1/G4", linewidth=0),
-            mpatches.Patch(facecolor=KGROUP_COLORS["G2/G3"], label="G2/G3", linewidth=0),
+            mpatches.Patch(facecolor=KGROUP_COLORS[g], label=g, linewidth=0)
+            for g in ["G1", "G2", "G3", "G4", "G1/G4", "G2/G3"]
+            if g in seen_groups
         ]
-        ax.legend(handles=group_patches, fontsize=7, ncol=1,
-                  bbox_to_anchor=(1.02, 0), loc="lower left",
-                  frameon=False, handlelength=1.2, handleheight=1.2,
-                  title="K-locus group", title_fontsize=7.5)
+        if has_other:
+            group_patches.append(
+                mpatches.Patch(facecolor="#bab0ac", label="Other (rare K-loci)", linewidth=0)
+            )
+        if group_patches:
+            ax.legend(handles=group_patches, fontsize=7, ncol=1,
+                      bbox_to_anchor=(1.02, 0), loc="lower left",
+                      frameon=False, handlelength=1.2, handleheight=1.2,
+                      title="K-locus group", title_fontsize=7.5)
 
 
 def _parse_gene_classes(val) -> dict[str, str]:
