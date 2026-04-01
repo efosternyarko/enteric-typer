@@ -570,12 +570,12 @@ def plot_tree_amr(
             st_handles.append(mpatches.Patch(facecolor="#bab0ac", label="Unknown"))
         # ~5 columns gives 4–8 rows for typical datasets; scale with count
         ncols = max(5, math.ceil(len(st_handles) / 4))
-        fig.text(0.5, -0.04, "Sequence type", ha="center", va="top",
-                 fontsize=7, fontweight="bold")
         fig.legend(
             handles=st_handles,
             ncol=ncols,
             fontsize=6.5,
+            title="Sequence type",
+            title_fontsize=7,
             loc="lower center",
             bbox_to_anchor=(0.5, -0.12),
             frameon=True, framealpha=0.88, edgecolor="none",
