@@ -272,9 +272,11 @@ def _panel_st(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
 KGROUP_COLORS = {
     "G1": "#4e79a7", "G2": "#f28e2b",
     "G3": "#59a14f", "G4": "#e15759",
+    # Kaptive reports database groups as compound strings
+    "G1/G4": "#9b59b6", "G2/G3": "#e67e22",
     "Unknown": "#bab0ac",
 }
-KGROUP_ORDER = ["G1", "G2", "G3", "G4", "Unknown"]
+KGROUP_ORDER = ["G1", "G2", "G3", "G4", "G1/G4", "G2/G3", "Unknown"]
 
 
 def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
