@@ -509,14 +509,19 @@ def plot_tree_amr(
             if prev_cls is not None:
                 cls_spans.append((prev_cls, span_start, len(gene_to_cls) - 1))
 
+            # Scale bracket/label gap with axes height: shorter axes (fewer
+            # samples) need more negative offset so labels clear the gene ticks
+            cls_bracket_y = -max(0.07, 1.5 / n)
+            cls_text_y    = cls_bracket_y - 0.02
+
             for cls_name, j0, j1 in cls_spans:
                 x_mid = (j0 + j1) / 2.0
                 label = CLASS_LABEL.get(cls_name, cls_name.capitalize())
                 # Bracket line spanning the class columns
-                ax_gene.plot([j0 - 0.4, j1 + 0.4], [-0.07, -0.07],
+                ax_gene.plot([j0 - 0.4, j1 + 0.4], [cls_bracket_y, cls_bracket_y],
                              transform=trans, color="#555555", lw=0.9, clip_on=False)
                 # Label rotated 40° to match gene tick labels
-                ax_gene.text(x_mid, -0.09, label,
+                ax_gene.text(x_mid, cls_text_y, label,
                              transform=trans, ha="right", va="top",
                              fontsize=6.5, fontweight="bold", color="#333333",
                              rotation=40, rotation_mode="anchor")
