@@ -13,7 +13,7 @@ Produces (PDF + PNG at 300 dpi):
   {prefix}_tree_amr.pdf / .png
 
 Layout (left → right):
-  Phylogenetic tree  |  Phylogroup strip  |  Virulence heatmap  |  AMR genes heatmap (grouped by class)
+  Phylogenetic tree  |  ST strip  |  PG strip (E. coli only)  |  Virulence heatmap  |  AMR genes heatmap (grouped by class)
 """
 
 from __future__ import annotations
@@ -337,20 +337,42 @@ def plot_tree_amr(
                     row_vg = set(_parse_genes(meta.loc[tip, vcol]))
                     mat_vir[i, j] = 1 if src[1] in row_vg else 0
 
+    # ── ST colour map (qualitative palette, consistent across strip + legend) ────
+    _ST_PALETTE = [
+        "#e63946", "#457b9d", "#2a9d8f", "#e9c46a", "#f4a261",
+        "#a8dadc", "#6a4c93", "#1982c4", "#8ac926", "#ff595e",
+        "#ffca3a", "#6a994e",
+    ]
+    st_vals = [
+        _clean_st(meta.loc[tip, "mlst_st"])
+        if (tip in meta.index and "mlst_st" in meta.columns) else "Unknown"
+        for tip in tips
+    ]
+    unique_sts = sorted(set(st_vals) - {"Unknown"})
+    st_color_map: dict[str, str] = {
+        st: _ST_PALETTE[i % len(_ST_PALETTE)] for i, st in enumerate(unique_sts)
+    }
+    st_color_map["Unknown"] = "#bab0ac"
+
     # ── Figure geometry ───────────────────────────────────────────────────────
     row_h   = max(0.05, min(0.18, 10.0 / n))
     fig_h   = max(5.0, n * row_h + 3.5)   # extra bottom margin for class sub-labels
     tree_w  = 4.5
-    strip_w = 0.35
+    st_w    = 0.35
+    strip_w = 0.35   # PG strip (E. coli only)
     vir_w   = max(1.5, n_vir   * 0.45) if n_vir   else 0
     gene_w  = max(2.0, n_genes * 0.35) if n_genes else 0
 
-    col_ratios = [tree_w, strip_w]
+    # E. coli: tree | ST | PG | vir | AMR
+    # Salmonella: tree | ST | vir | AMR  (PG strip hidden)
+    col_ratios = [tree_w, st_w]
     n_axes = 2
+    if species == "ecoli":
+        col_ratios.append(strip_w); n_axes += 1
     if n_vir:
-        col_ratios.append(vir_w);  n_axes += 1
+        col_ratios.append(vir_w);   n_axes += 1
     if n_genes:
-        col_ratios.append(gene_w); n_axes += 1
+        col_ratios.append(gene_w);  n_axes += 1
 
     fig, axes = plt.subplots(
         1, n_axes,
@@ -359,8 +381,10 @@ def plot_tree_amr(
     )
     axes    = list(axes) if n_axes > 1 else [axes]
     ax_tree = axes[0]
-    ax_pg   = axes[1]
+    ax_st   = axes[1]
     _aidx   = 2
+    ax_pg   = axes[_aidx] if species == "ecoli" else None
+    if species == "ecoli": _aidx += 1
     ax_vir  = axes[_aidx] if n_vir   else None; _aidx += (1 if n_vir   else 0)
     ax_gene = axes[_aidx] if n_genes else None
 
@@ -392,9 +416,20 @@ def plot_tree_amr(
     ax_tree.text(0, y_sb - 0.5, f"{sb:.3g}",
                  ha="left", va="bottom", fontsize=6.5)
 
+    # ── ST strip (all species) ────────────────────────────────────────────────
+    for i, st in enumerate(st_vals):
+        ax_st.barh(i, 1, color=st_color_map[st], height=1.0, linewidth=0, align="center")
+    ax_st.set_xlim(0, 1)
+    ax_st.set_ylim(n - 0.5, -0.5)
+    ax_st.set_yticks([])
+    ax_st.set_xticks([])
+    ax_st.set_title("ST", fontsize=7.5, fontweight="bold", pad=3)
+    for sp in ax_st.spines.values():
+        sp.set_visible(False)
+
     # ── Phylogroup strip (E. coli only) ──────────────────────────────────────
     seen_pgs: set[str] = set()
-    if species == "ecoli":
+    if species == "ecoli" and ax_pg is not None:
         for i, tip in enumerate(tips):
             pg  = _tip_phylogroup(tip)
             col = PHYLOGROUP_COLORS.get(pg, PHYLOGROUP_COLORS["Unknown"])
@@ -407,9 +442,6 @@ def plot_tree_amr(
         ax_pg.set_title("PG", fontsize=7.5, fontweight="bold", pad=3)
         for sp in ax_pg.spines.values():
             sp.set_visible(False)
-    else:
-        # Hide phylogroup strip for Salmonella
-        ax_pg.set_visible(False)
 
     # ── Virulence heatmap ─────────────────────────────────────────────────────
     # Teal/green palette — distinct from the AMR red
@@ -477,20 +509,32 @@ def plot_tree_amr(
             for cls_name, j0, j1 in cls_spans:
                 x_mid = (j0 + j1) / 2.0
                 label = CLASS_LABEL.get(cls_name, cls_name.capitalize())
-                # Bracket line spanning the class columns — placed close under gene labels
-                ax_gene.plot([j0 - 0.4, j1 + 0.4], [-0.12, -0.12],
+                # Bracket line spanning the class columns
+                ax_gene.plot([j0 - 0.4, j1 + 0.4], [-0.07, -0.07],
                              transform=trans, color="#555555", lw=0.9, clip_on=False)
                 # Label rotated 40° to match gene tick labels
-                ax_gene.text(x_mid, -0.14, label,
+                ax_gene.text(x_mid, -0.09, label,
                              transform=trans, ha="right", va="top",
                              fontsize=6.5, fontweight="bold", color="#333333",
                              rotation=40, rotation_mode="anchor")
 
         # (AMR genes legend consolidated into tree-panel legend below)
 
-    # ── Consolidated legend — bottom-left of tree panel, below scale bar ─────
-    # Order: Phylogroup swatches, then Virulence present/absent, then AMR present/absent
+    # ── Consolidated legend — bottom-left of tree panel ───────────────────────
+    # Order: ST colours, Phylogroup (E. coli), Virulence present/absent, AMR present/absent
     legend_handles: list[mpatches.Patch] = []
+
+    # Section 0: Sequence type
+    if unique_sts:
+        legend_handles.append(mpatches.Patch(color="none", label="Sequence type"))
+        for st in unique_sts:
+            legend_handles.append(
+                mpatches.Patch(facecolor=st_color_map[st], label=f"  {st}")
+            )
+        if "Unknown" in set(st_vals):
+            legend_handles.append(
+                mpatches.Patch(facecolor="#bab0ac", label="  Unknown")
+            )
 
     # Section 1: Phylogroup (E. coli only)
     if species == "ecoli" and seen_pgs:
@@ -523,7 +567,7 @@ def plot_tree_amr(
         handles=legend_handles,
         fontsize=6.5,
         loc="lower left",
-        bbox_to_anchor=(0.0, -0.32),
+        bbox_to_anchor=(0.0, -0.22),
         handlelength=1,
         frameon=True, framealpha=0.88, edgecolor="none",
         labelspacing=0.3,
