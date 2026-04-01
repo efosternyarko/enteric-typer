@@ -9,9 +9,20 @@ produces publication-ready summary figures.
 
 | Species | Typing tools |
 |---|---|
-| *Escherichia coli* | MLST (Achtman), AMRFinder, ECTyper (serotype), EzClermont (Clermont phylogroup), Kleborate (pathotype on Linux; MLST on macOS ARM64), PlasmidFinder, Kaptive (K-locus) |
+| *Escherichia coli* | MLST (Achtman), AMRFinder, ECTyper (serotype), EzClermont (Clermont phylogroup), Kleborate (pathotype), PlasmidFinder, Kaptive (K-locus) |
 | *Salmonella enterica* | MLST, AMRFinder, SISTR (serovar), PlasmidFinder, Abricate VFDB |
 | Other / unclassified | Species ID only (logged and skipped) |
+
+> **Kleborate:** runs full pathotype detection on all platforms. On macOS
+> Apple Silicon (ARM64) without Rosetta 2, it automatically falls back to
+> MLST-only mode — all other tools run at full capability regardless of
+> platform (Linux, macOS Intel/ARM64, HPC).
+
+> **AMR gene classification:** all AMRFinder hits are classified by
+> [AMRrules](https://github.com/AMRverse/AMRrules) into *acquired* resistance
+> genes and *intrinsic* (species-wildtype) genes. Intrinsic genes are retained
+> in the results TSV for reference but are **excluded from all AMR plots** so
+> that figures reflect only clinically relevant acquired resistance.
 
 ## Workflow overview
 
@@ -33,12 +44,11 @@ E. coli   Salmonella   (other species logged and skipped)
 │                                                            │
 │  E. coli                       Salmonella                  │
 │  ──────────────────────────    ───────────────────────     │
-│  MLST (achtman_4)              MLST (salmonella)           │
+│  MLST (achtman_4)              MLST (senterica_achtman_2)  │
 │  AMRFinder                     AMRFinder                   │
 │  ECTyper (O:H serotype)        SISTR (serovar)             │
 │  EzClermont (phylogroup)       PlasmidFinder               │
-│  Kleborate (pathotype on       Abricate VFDB               │
-│    Linux; MLST on macOS ARM64)                             │
+│  Kleborate (pathotype)         Abricate VFDB               │
 │  PlasmidFinder                                             │
 │  Kaptive K-locus (G2/G3                                    │
 │    → G1/G4 on untypeables)                                 │
@@ -57,15 +67,21 @@ E. coli   Salmonella   (other species logged and skipped)
 │  4. AGGREGATE  (one TSV per species)                         │
 │  ecoli_typer_results.tsv                                     │
 │  salmonella_typer_results.tsv                                │
-│  (includes acquired vs intrinsic AMR gene classification     │
-│   via AMRrules — intrinsic genes flagged, not excluded)      │
+│  AMRFinder hits classified by AMRrules into:                 │
+│    amrfinder_acquired_genes  — clinically relevant acquired  │
+│                                resistance genes              │
+│    amrfinder_intrinsic_genes — species-intrinsic genes       │
+│                                (flagged, retained in TSV)    │
 └──────────────────────────────────────────────────────────────┘
         │
         ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │  5. SUMMARY PLOTS                                                    │
+│  Intrinsic resistance genes (classified by AMRrules) are excluded   │
+│  from all AMR figures — only acquired genes are plotted.            │
+│                                                                      │
 │  Fig 1: ST distribution · serotypes · AMR drug classes · MDR        │
-│  Fig 2: Core-SNP tree + phylogroup strip + virulence + AMR gene panel │
+│  Fig 2: Core-SNP tree + ST/phylogroup strips + virulence + AMR panel │
 │  Fig 3: Top acquired AMR genes (intrinsic genes excluded)            │
 │  Fig 4: Plasmid replicon types                                       │
 │  Fig 5: Virulence genes / pathotype (E. coli) or VFDB (Salmonella)  │
@@ -409,9 +425,11 @@ conda install -c conda-forge graphviz
 
 ### macOS Apple Silicon (M1/M2/M3/M4)
 
-Some Bioconda packages (notably `abricate`) have no native arm64 build. Add the `arm64`
+Some Bioconda packages (e.g. `abricate`) have no native arm64 build. Add the `arm64`
 profile to force Rosetta 2 emulation — tools run at near-native speed and the pipeline
-behaves identically to Linux:
+produces identical results to Linux. Kleborate will automatically use MLST-only mode
+on ARM64 if its full pathotype dependencies are unavailable, but all other tools run
+at full capability:
 
 ```bash
 nextflow run main.nf \
