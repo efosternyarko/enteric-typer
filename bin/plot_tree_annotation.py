@@ -413,10 +413,10 @@ def plot_tree_amr(
     import matplotlib.transforms as mtransforms
     sb        = _scale_bar_value(max_x)
     blended   = mtransforms.blended_transform_factory(ax_tree.transData, ax_tree.transAxes)
-    y_bar     = 1.04   # just above axes top — same level as set_title(pad=3) labels
+    y_bar     = 1.01   # just above axes top — same level as set_title(pad=3) labels
     ax_tree.plot([0, sb], [y_bar, y_bar], color="#333333", lw=1.2,
                  transform=blended, clip_on=False)
-    ax_tree.text(0, y_bar + 0.02, f"{sb:.3g}",
+    ax_tree.text(0, y_bar + 0.015, f"{sb:.3g}",
                  transform=blended, ha="left", va="bottom", fontsize=6.5)
 
     # ── ST strip (all species) ────────────────────────────────────────────────
@@ -523,58 +523,60 @@ def plot_tree_amr(
 
         # (AMR genes legend consolidated into tree-panel legend below)
 
-    # ── Consolidated legend — bottom-left of tree panel ───────────────────────
-    # Order: ST colours, Phylogroup (E. coli), Virulence present/absent, AMR present/absent
-    legend_handles: list[mpatches.Patch] = []
+    # ── Left legend: Phylogroup (E. coli) + Virulence + AMR present/absent ──────
+    left_handles: list[mpatches.Patch] = []
 
-    # Section 0: Sequence type
-    if unique_sts:
-        legend_handles.append(mpatches.Patch(color="none", label="Sequence type"))
-        for st in unique_sts:
-            legend_handles.append(
-                mpatches.Patch(facecolor=st_color_map[st], label=f"  {st}")
-            )
-        if "Unknown" in set(st_vals):
-            legend_handles.append(
-                mpatches.Patch(facecolor="#bab0ac", label="  Unknown")
-            )
-
-    # Section 1: Phylogroup (E. coli only)
     if species == "ecoli" and seen_pgs:
-        legend_handles.append(mpatches.Patch(color="none", label="Phylogroup"))
+        left_handles.append(mpatches.Patch(color="none", label="Phylogroup"))
         for pg in sorted(seen_pgs):
-            legend_handles.append(
+            left_handles.append(
                 mpatches.Patch(facecolor=PHYLOGROUP_COLORS.get(pg, "#bab0ac"),
                                label=f"  {pg}")
             )
 
-    # Section 2: Virulence genes (only if panel exists)
     if n_vir:
-        legend_handles.append(mpatches.Patch(color="none", label="Virulence genes"))
-        legend_handles.append(
-            mpatches.Patch(facecolor="#2a9d8f", label="  Present"))
-        legend_handles.append(
-            mpatches.Patch(facecolor="#f5f5f5", edgecolor="#cccccc",
-                           linewidth=0.5, label="  Absent"))
+        left_handles.append(mpatches.Patch(color="none", label="Virulence genes"))
+        left_handles.append(mpatches.Patch(facecolor="#2a9d8f", label="  Present"))
+        left_handles.append(mpatches.Patch(facecolor="#f5f5f5", edgecolor="#cccccc",
+                                           linewidth=0.5, label="  Absent"))
 
-    # Section 3: AMR genes (only if panel exists)
     if n_genes:
-        legend_handles.append(mpatches.Patch(color="none", label="AMR genes"))
-        legend_handles.append(
-            mpatches.Patch(facecolor="#c0392b", label="  Present"))
-        legend_handles.append(
-            mpatches.Patch(facecolor="#f5f5f5", edgecolor="#cccccc",
-                           linewidth=0.5, label="  Absent"))
+        left_handles.append(mpatches.Patch(color="none", label="AMR genes"))
+        left_handles.append(mpatches.Patch(facecolor="#c0392b", label="  Present"))
+        left_handles.append(mpatches.Patch(facecolor="#f5f5f5", edgecolor="#cccccc",
+                                           linewidth=0.5, label="  Absent"))
 
-    ax_tree.legend(
-        handles=legend_handles,
-        fontsize=6.5,
-        loc="lower left",
-        bbox_to_anchor=(0.0, -0.22),
-        handlelength=1,
-        frameon=True, framealpha=0.88, edgecolor="none",
-        labelspacing=0.3,
-    )
+    if left_handles:
+        ax_tree.legend(
+            handles=left_handles,
+            fontsize=6.5,
+            loc="lower left",
+            bbox_to_anchor=(0.0, -0.22),
+            handlelength=1,
+            frameon=True, framealpha=0.88, edgecolor="none",
+            labelspacing=0.3,
+        )
+
+    # ── Bottom figure legend: ST colour blocks (wide multi-column) ────────────
+    if unique_sts:
+        st_handles = [mpatches.Patch(facecolor=st_color_map[st], label=st)
+                      for st in unique_sts]
+        if "Unknown" in set(st_vals):
+            st_handles.append(mpatches.Patch(facecolor="#bab0ac", label="Unknown"))
+        # ~5 columns gives 4–8 rows for typical datasets; scale with count
+        ncols = max(5, math.ceil(len(st_handles) / 4))
+        fig.text(0.5, -0.04, "Sequence type", ha="center", va="top",
+                 fontsize=7, fontweight="bold")
+        fig.legend(
+            handles=st_handles,
+            ncol=ncols,
+            fontsize=6.5,
+            loc="lower center",
+            bbox_to_anchor=(0.5, -0.12),
+            frameon=True, framealpha=0.88, edgecolor="none",
+            handlelength=1, handleheight=1,
+            labelspacing=0.3, columnspacing=1.0,
+        )
 
     # ── Title ─────────────────────────────────────────────────────────────────
     sp_label = "E. coli" if species == "ecoli" else "Salmonella enterica"

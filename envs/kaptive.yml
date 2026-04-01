@@ -4,6 +4,6 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - kaptive=3.0.0b5
+  - kaptive=3.2.1
   - biopython
   - pandas
