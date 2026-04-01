@@ -440,10 +440,23 @@ def _panel_sero(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
         leg_title = "Clonal group"
     else:
         leg_title = "ST complex"
-    ax.legend(handles=patches, fontsize=7, ncol=1,
-              bbox_to_anchor=(1.02, 1), loc="upper left",
-              frameon=False, handlelength=1.2, handleheight=1.2,
-              title=leg_title, title_fontsize=7.5)
+
+    locus_leg = ax.legend(handles=patches, fontsize=7, ncol=1,
+                          bbox_to_anchor=(1.02, 1), loc="upper left",
+                          frameon=False, handlelength=1.2, handleheight=1.2,
+                          title=leg_title, title_fontsize=7.5)
+
+    # K-locus group colour key — second legend below the locus legend
+    if use_klocus:
+        ax.add_artist(locus_leg)   # keep the first legend when adding a second
+        group_patches = [
+            mpatches.Patch(facecolor=KGROUP_COLORS["G1/G4"], label="G1/G4", linewidth=0),
+            mpatches.Patch(facecolor=KGROUP_COLORS["G2/G3"], label="G2/G3", linewidth=0),
+        ]
+        ax.legend(handles=group_patches, fontsize=7, ncol=1,
+                  bbox_to_anchor=(1.02, 0), loc="lower left",
+                  frameon=False, handlelength=1.2, handleheight=1.2,
+                  title="K-locus group", title_fontsize=7.5)
 
 
 def _parse_gene_classes(val) -> dict[str, str]:
