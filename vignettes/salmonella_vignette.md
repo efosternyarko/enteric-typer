@@ -250,7 +250,16 @@ Gambian NTS, including genes conferring resistance to aminoglycosides,
 
 ### Fig 4 — Plasmid replicon types
 
-No plasmid replicons were detected in this dataset.
+**Figure 4. Prevalence of plasmid replicon types across 99 clinical *Salmonella enterica*
+isolates from The Gambia.**
+Horizontal bar chart showing the number of isolates in which each plasmid
+replicon type was detected by PlasmidFinder (Enterobacteriaceae database).
+IncFII(S) and IncFIB(S) — Salmonella-associated IncF plasmids — are the most
+prevalent replicons, detected in approximately 54% and 49% of isolates respectively,
+consistent with the widespread distribution of IncF plasmids in Enterobacteriaceae.
+Non-IncF replicons including IncI1, IncN, and IncX1 are present at lower frequency.
+The detection of IncL/M(pOXA-48) in a small number of isolates is notable given its
+association with OXA-48-type carbapenemase-encoding plasmids.
 
 ![Plasmid replicons](img/salmonella/salmonella_fig4_plasmid_replicons.png)
 
