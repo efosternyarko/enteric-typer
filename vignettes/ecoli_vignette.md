@@ -142,7 +142,14 @@ is consistent with the commensal, non-clinical source of these isolates.
 
 ### Fig 4 — Plasmid replicon types
 
-No plasmid replicons were detected in this dataset.
+**Figure 4. Prevalence of plasmid replicon types across 98 *Escherichia coli*
+NHP isolates.**
+Horizontal bar chart showing the number of isolates in which each plasmid
+replicon type was detected by PlasmidFinder (Enterobacteriaceae database).
+IncF-group replicons (IncFIB, IncFII variants) dominate, consistent with the
+broad host range of IncF plasmids in commensal *E. coli*. Col-type small
+replicons (Col156, ColRNAI) are also prevalent, reflecting the diverse mobile
+genetic element repertoire across NHP gut isolates.
 
 ![Plasmid replicons](img/ecoli/ecoli_fig4_plasmid_replicons.png)
 
