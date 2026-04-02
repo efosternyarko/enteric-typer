@@ -543,7 +543,7 @@ def plot_tree_amr(
     left_handles: list[mpatches.Patch] = []
 
     if species == "ecoli" and seen_pgs:
-        left_handles.append(mpatches.Patch(color="none", label="Phylogroup"))
+        left_handles.append(mpatches.Patch(color="none", label="Phylogroup (PG)"))
         for pg in sorted(seen_pgs):
             left_handles.append(
                 mpatches.Patch(facecolor=PHYLOGROUP_COLORS.get(pg, "#bab0ac"),
@@ -585,7 +585,7 @@ def plot_tree_amr(
             handles=st_handles,
             ncol=ncols,
             fontsize=6.5,
-            title="Sequence type",
+            title="Sequence type (ST)",
             title_fontsize=7,
             loc="lower center",
             bbox_to_anchor=(0.5, -0.12),
