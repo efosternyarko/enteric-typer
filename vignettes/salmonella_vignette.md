@@ -250,12 +250,7 @@ Gambian NTS, including genes conferring resistance to aminoglycosides,
 
 ### Fig 4 — Plasmid replicon types
 
-**Figure 4. Prevalence of plasmid replicon types across 99 clinical *Salmonella
-enterica* isolates from The Gambia.**
-Horizontal bar chart showing the number of isolates in which each plasmid
-replicon type was detected by PlasmidFinder (Enterobacteriaceae database).
-The replicon distribution highlights the mobile genetic element repertoire
-associated with AMR gene carriage in Gambian NTS isolates.
+No plasmid replicons were detected in this dataset.
 
 ![Plasmid replicons](img/salmonella/salmonella_fig4_plasmid_replicons.png)
 
