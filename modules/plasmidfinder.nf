@@ -30,7 +30,7 @@ process PLASMIDFINDER {
         -o ./ \\
         -mp "\$BLASTN_DIR" \\
         -p  "\$DB_PATH" \\
-        -db ${database} \\
+        -d  ${database} \\
         -l 0.60 \\
         -t 0.90 \\
         -q \\
