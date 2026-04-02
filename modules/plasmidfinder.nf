@@ -18,17 +18,16 @@ process PLASMIDFINDER {
 
     script:
     """
-    # Locate database and blastn bundled with the conda / container
+    # Locate blastn and PlasmidFinder database bundled with the conda env
     BLASTN_PATH=\$(which blastn)
     ENV_PREFIX=\$(dirname \$(dirname "\$BLASTN_PATH"))
     DB_PATH=\$(find "\$ENV_PREFIX/share" -name "database" -type d 2>/dev/null | head -1)
     [ -z "\$DB_PATH" ] && DB_PATH="/database"
-    BLASTN_DIR=\$(dirname "\$BLASTN_PATH")
 
     plasmidfinder.py \\
         -i ${fasta} \\
         -o ./ \\
-        -mp "\$BLASTN_DIR" \\
+        -mp "\$BLASTN_PATH" \\
         -p  "\$DB_PATH" \\
         -d  ${database} \\
         -l 0.60 \\
