@@ -36,15 +36,42 @@ process PLASMIDFINDER {
         2>${sample_id}_plasmidfinder.log \\
     || true
 
-    if [ -f results_tab.tsv ] && [ \$(wc -l < results_tab.tsv) -gt 1 ]; then
-        # Prepend sample ID column
-        awk -v s="${sample_id}" 'NR==1 {print "sample\\t" \$0; next} {print s "\\t" \$0}' \\
-            results_tab.tsv > ${sample_id}_plasmidfinder.tsv
-    else
-        printf 'sample\\tPlasmid\\tIdentity\\tQuery / Template length\\tContig\\tPosition in contig\\tNote\\tAccession number\\n' \\
-            > ${sample_id}_plasmidfinder.tsv
-        printf '%s\\tNo replicons found\\tNA\\tNA\\tNA\\tNA\\tNA\\tNA\\n' ${sample_id} \\
-            >> ${sample_id}_plasmidfinder.tsv
-    fi
+    # v2.1.6 writes data.json instead of results_tab.tsv — parse JSON output
+    python3 - <<'PYEOF'
+import json, sys
+
+sample = "${sample_id}"
+header = "sample\tPlasmid\tIdentity\tQuery / Template length\tContig\tPosition in contig\tNote\tAccession number"
+
+try:
+    with open("data.json") as fh:
+        data = json.load(fh)
+    hits = []
+    pf = data.get("plasmidfinder", {}).get("results", {})
+    for db_group in pf.values():
+        for db_hits in db_group.values():
+            if not isinstance(db_hits, dict):
+                continue
+            for h in db_hits.values():
+                hits.append("\t".join([
+                    sample,
+                    str(h.get("plasmid", "")),
+                    str(h.get("identity", "")),
+                    f"{h.get('HSP_length','')} / {h.get('template_length','')}",
+                    str(h.get("contig_name", "")),
+                    str(h.get("positions_in_contig", "")),
+                    str(h.get("note", "")),
+                    str(h.get("accession", "")),
+                ]))
+except Exception:
+    hits = []
+
+with open("${sample_id}_plasmidfinder.tsv", "w") as out:
+    out.write(header + "\n")
+    if hits:
+        out.write("\n".join(hits) + "\n")
+    else:
+        out.write(f"{sample}\tNo replicons found\tNA\tNA\tNA\tNA\tNA\tNA\n")
+PYEOF
     """
 }
