@@ -38,40 +38,40 @@ process PLASMIDFINDER {
 
     # v2.1.6 writes data.json instead of results_tab.tsv — parse JSON output
     python3 - <<'PYEOF'
-import json, sys
+import json
 
 sample = "${sample_id}"
-header = "sample\tPlasmid\tIdentity\tQuery / Template length\tContig\tPosition in contig\tNote\tAccession number"
+cols   = ["sample", "Plasmid", "Identity", "Query / Template length",
+          "Contig", "Position in contig", "Note", "Accession number"]
 
 try:
     with open("data.json") as fh:
         data = json.load(fh)
     hits = []
-    pf = data.get("plasmidfinder", {}).get("results", {})
-    for db_group in pf.values():
+    for db_group in data.get("plasmidfinder", {}).get("results", {}).values():
         for db_hits in db_group.values():
             if not isinstance(db_hits, dict):
                 continue
             for h in db_hits.values():
-                hits.append("\t".join([
-                    sample,
-                    str(h.get("plasmid", "")),
-                    str(h.get("identity", "")),
-                    f"{h.get('HSP_length','')} / {h.get('template_length','')}",
-                    str(h.get("contig_name", "")),
-                    str(h.get("positions_in_contig", "")),
-                    str(h.get("note", "")),
-                    str(h.get("accession", "")),
-                ]))
+                row = [sample,
+                       str(h.get("plasmid", "")),
+                       str(h.get("identity", "")),
+                       str(h.get("HSP_length", "")) + " / " + str(h.get("template_length", "")),
+                       str(h.get("contig_name", "")),
+                       str(h.get("positions_in_contig", "")),
+                       str(h.get("note", "")),
+                       str(h.get("accession", ""))]
+                hits.append(chr(9).join(row))
 except Exception:
     hits = []
 
 with open("${sample_id}_plasmidfinder.tsv", "w") as out:
-    out.write(header + "\n")
+    print(chr(9).join(cols), file=out)
     if hits:
-        out.write("\n".join(hits) + "\n")
+        for hit in hits:
+            print(hit, file=out)
     else:
-        out.write(f"{sample}\tNo replicons found\tNA\tNA\tNA\tNA\tNA\tNA\n")
+        print(chr(9).join([sample, "No replicons found", "NA", "NA", "NA", "NA", "NA", "NA"]), file=out)
 PYEOF
     """
 }
