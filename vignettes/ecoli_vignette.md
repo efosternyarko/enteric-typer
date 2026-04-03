@@ -87,21 +87,23 @@ One row per sample. Key columns:
 **Figure 1. Population-level summary of 98 *Escherichia coli* isolates from
 non-human primate gut microbiomes in The Gambia.**
 Four panels are shown. **(A)** Sequence type (ST) distribution: horizontal bar
-chart of the top sequence types by count (Achtman 7-gene scheme). Commensal
-*E. coli* from NHP hosts span a diverse range of STs, reflecting the broad
-phylogenetic diversity typical of gut commensals.
+chart of the top sequence types by count (Achtman 7-gene scheme), with bars
+coloured by Clermont phylogroup. Commensal *E. coli* from NHP hosts span a
+diverse range of STs dominated by B2 (ST73, ST127) and B1 lineages, reflecting
+the broad phylogenetic diversity typical of gut commensals.
 **(B)** O:H serotype distribution coloured by K-locus group: stacked horizontal
 bar chart where each bar represents a serotype (ECTyper) and fill colours
-indicate the K-locus group — purple for G1/G4, orange for G2/G3 — enabling
+indicate the K-locus group—purple for G1/G4, orange for G2/G3—enabling
 rapid assessment of the K-locus landscape across circulating serotypes.
-Serotypes not in the top 15 are grouped as "Other / Unknown"; bars retain the
-K-locus group colours of their constituent isolates. A secondary legend shows
-individual K-locus types within each group.
+Both G1/G4 and G2/G3 loci are represented across the dataset. Serotypes not in
+the top 15 are grouped as "Other / Unknown"; bars retain the K-locus group
+colours of their constituent isolates. A secondary legend shows individual
+K-locus types within each group.
 **(C)** Acquired AMR drug class prevalence: horizontal bar chart showing the
 proportion of isolates carrying at least one acquired resistance gene per drug
 class, with intrinsic resistance genes excluded.
-**(D)** Multi-drug resistance (MDR): bar showing the proportion of isolates with
-acquired resistance to ≥ 3 antibiotic classes.
+**(D)** Multi-drug resistance (MDR): histogram of the number of resistant drug
+classes per isolate, with MDR isolates (≥ 3 classes) highlighted in red.
 
 ![Population summary](img/ecoli/ecoli_fig1_population_summary.png)
 
