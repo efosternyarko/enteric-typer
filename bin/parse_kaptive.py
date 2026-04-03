@@ -20,11 +20,12 @@ NA = "NA"
 
 # Confidence rank: higher = more reliable
 G2G3_CONFIDENCE_RANK = {
-    "Perfect":   5,
-    "Very High": 4,
-    "High":      3,
-    "Good":      2,
-    "Low":       1,
+    "Typeable":   6,   # Kaptive v3 + Gladstone G2/G3 db vocabulary
+    "Perfect":    5,
+    "Very High":  4,
+    "High":       3,
+    "Good":       2,
+    "Low":        1,
     "Untypeable": 0,
 }
 

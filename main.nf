@@ -184,7 +184,7 @@ workflow {
         .branch {
             typed:     it[2].text.contains('Perfect') || it[2].text.contains('Very High') ||
                        it[2].text.contains('High')    || it[2].text.contains('Good') ||
-                       it[2].text.contains('Low')
+                       it[2].text.contains('Low')     || it[2].text.contains('\tTypeable')
             untypeable: true
         }
         .set { ch_g2g3_branched }
