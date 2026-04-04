@@ -61,7 +61,7 @@ E. coli  Salmonella  Shigella   (other species logged and skipped)
 │  3. PHYLOGENETICS  (per species, ≥ 3 samples; skip with                  │
 │                    --skip_local_phylo)                                   │
 │  SKA2 build (k=31) → whole-genome SNP alignment + SNP distance matrix   │
-│  → IQ-TREE ML tree (ModelFinder Plus automatic model selection)          │
+│  → IQ-TREE ML tree (GTR+G model; override with --iqtree_model MFP)       │
 └──────────────────────────────────────────────────────────────────────────┘
         │
         ▼
@@ -108,7 +108,7 @@ E. coli  Salmonella  Shigella   (other species logged and skipped)
 > which aligns assemblies without a reference genome and produces a genome-wide SNP
 > alignment and pairwise SNP distance matrix. The alignment is then passed to
 > IQ-TREE 2 for maximum-likelihood tree inference with automatic model
-> selection (ModelFinder Plus). Phylogenetics runs per species when ≥ 3
+> selection (default: GTR+G; set `--iqtree_model MFP` to enable ModelFinder Plus). Phylogenetics runs per species when ≥ 3
 > samples are present; skip with `--skip_local_phylo` for faster runs.
 
 ---
@@ -345,7 +345,7 @@ nextflow run main.nf \
 | `--outdir` | `results` | Output directory |
 | `--skip_local_phylo` | `false` | Skip SKA2 + IQ-TREE (no tree, no SNP matrix/heatmap) |
 | `--ska2_min_samples` | `3` | Minimum samples to attempt SKA2/IQ-TREE |
-| `--iqtree_model` | `MFP` | IQ-TREE substitution model (`MFP` = ModelFinder Plus automatic selection) |
+| `--iqtree_model` | `GTR+G` | IQ-TREE substitution model (standard for bacterial SNP alignments; use `MFP` for automatic model selection) |
 | `--iqtree_bootstraps` | `1000` | IQ-TREE ultrafast bootstrap replicates |
 
 ---
