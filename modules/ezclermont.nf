@@ -23,9 +23,13 @@ process EZCLERMONT {
     """
     # ezclermont outputs: "<experiment_name>\\t<phylogroup>" to stdout
     # -e sets the experiment name to sample_id so the first column matches
+    # -m 200: lower minimum contig length from the 500 bp default so that
+    #   assemblies with many short contigs still have enough sequence context
+    #   for the control PCR amplicons (~300-400 bp) to be detected
     printf 'sample\\tclermont_phylogroup\\n' > ${sample_id}_clermont.tsv
     ezclermont ${fasta} \
         -e ${sample_id} \
+        -m 200 \
         2>${sample_id}_clermont.log \
     | awk '{print \$1 "\\t" \$2}' \
     >> ${sample_id}_clermont.tsv \
