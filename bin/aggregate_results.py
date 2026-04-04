@@ -465,7 +465,9 @@ SALMONELLA_COLUMNS = [
 SHIGELLA_COLUMNS = [
     "sample",
     "mlst_scheme", "mlst_st", "mlst_st_complex",
-    "shigeifinder_ipaH", "shigeifinder_cluster", "shigeifinder_serotype",
+    "shigeifinder_ipaH", "shigeifinder_virulence_plasmid",
+    "shigeifinder_cluster", "shigeifinder_serotype",
+    "shigeifinder_o_antigen", "shigeifinder_h_antigen",
     "mykrobe_genotype", "mykrobe_lineage", "mykrobe_clade",
     "mykrobe_subclade", "mykrobe_genotype_name", "mykrobe_confidence",
     "amrfinder_acquired_genes",
@@ -481,20 +483,30 @@ SHIGELLA_COLUMNS = [
 
 
 def load_shigeifinder(files: list) -> dict:
-    """Parse ShigEiFinder output → {sample: {ipaH, cluster, serotype}}."""
+    """Parse ShigEiFinder output → per-sample dict of typed fields.
+
+    ShigEiFinder v1.3.5 output columns (all uppercase):
+      SAMPLE  ipaH  VIRULENCE_PLASMID  CLUSTER  SEROTYPE  O_ANTIGEN  H_ANTIGEN  NOTES
+    """
     data: dict = {}
     for path in files:
         try:
             with open(path) as fh:
                 reader = csv.DictReader(fh, delimiter="\t")
                 for row in reader:
-                    sid = str(row.get("sample", "")).strip()
+                    # column name may be SAMPLE (native) or sample (fallback)
+                    sid = (str(row.get("SAMPLE", "") or row.get("sample", "")).strip())
                     if not sid:
                         continue
+                    def _get(col: str) -> str:
+                        return str(row.get(col, "NA")).strip() or "NA"
                     data[sid] = {
-                        "shigeifinder_ipaH":     str(row.get("ipaH",     "NA")).strip() or "NA",
-                        "shigeifinder_cluster":  str(row.get("Cluster",  "NA")).strip() or "NA",
-                        "shigeifinder_serotype": str(row.get("Serotype", "NA")).strip() or "NA",
+                        "shigeifinder_ipaH":              _get("ipaH"),
+                        "shigeifinder_virulence_plasmid": _get("VIRULENCE_PLASMID"),
+                        "shigeifinder_cluster":           _get("CLUSTER"),
+                        "shigeifinder_serotype":          _get("SEROTYPE"),
+                        "shigeifinder_o_antigen":         _get("O_ANTIGEN"),
+                        "shigeifinder_h_antigen":         _get("H_ANTIGEN"),
                     }
         except Exception:
             pass
@@ -721,9 +733,12 @@ def main() -> None:
                 mk = mykrobe_data.get(sid, {})
                 pv = pinv_data.get(sid, {})
                 row.update({
-                    "shigeifinder_ipaH":     sr.get("shigeifinder_ipaH",     "NA"),
-                    "shigeifinder_cluster":  sr.get("shigeifinder_cluster",  "NA"),
-                    "shigeifinder_serotype": sr.get("shigeifinder_serotype", "NA"),
+                    "shigeifinder_ipaH":              sr.get("shigeifinder_ipaH",              "NA"),
+                    "shigeifinder_virulence_plasmid":  sr.get("shigeifinder_virulence_plasmid", "NA"),
+                    "shigeifinder_cluster":            sr.get("shigeifinder_cluster",           "NA"),
+                    "shigeifinder_serotype":           sr.get("shigeifinder_serotype",          "NA"),
+                    "shigeifinder_o_antigen":          sr.get("shigeifinder_o_antigen",         "NA"),
+                    "shigeifinder_h_antigen":          sr.get("shigeifinder_h_antigen",         "NA"),
                     "mykrobe_genotype":      mk.get("mykrobe_genotype",      "NA"),
                     "mykrobe_lineage":       mk.get("mykrobe_lineage",       "NA"),
                     "mykrobe_clade":         mk.get("mykrobe_clade",         "NA"),

@@ -22,17 +22,14 @@ process SHIGEIFINDER {
     script:
     """
     shigeifinder \\
-        -i  ${fasta} \\
-        -t  ${task.cpus} \\
+        -i      ${fasta} \\
+        -t      ${task.cpus} \\
+        --output ${sample_id}_shigeifinder.tsv \\
         2>${sample_id}_shigeifinder.log \\
-    | awk -v sid="${sample_id}" '
-        NR == 1 { print "sample\\t" \$0 }
-        NR  > 1 { print sid "\\t" \$0 }
-    ' > ${sample_id}_shigeifinder.tsv \\
     || (
-        printf 'sample\\tipaH\\tCluster\\tSerotype\\tNotes\\n' \\
+        printf 'SAMPLE\\tipaH\\tVIRULENCE_PLASMID\\tCLUSTER\\tSEROTYPE\\tO_ANTIGEN\\tH_ANTIGEN\\tNOTES\\n' \\
             > ${sample_id}_shigeifinder.tsv
-        printf '%s\\tNA\\tNA\\tNA\\tNA\\n' "${sample_id}" \\
+        printf '%s\\tNA\\tNA\\tNA\\tNA\\tNA\\tNA\\tNA\\n' "${sample_id}" \\
             >> ${sample_id}_shigeifinder.tsv
     )
     """
