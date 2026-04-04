@@ -10,7 +10,8 @@ produces publication-ready summary figures.
 | Species | Typing tools |
 |---|---|
 | *Escherichia coli* | MLST (Achtman), AMRFinder, ECTyper (serotype), EzClermont (Clermont phylogroup), Kleborate (pathotype), PlasmidFinder, Kaptive (K-locus) |
-| *Salmonella enterica* | MLST, AMRFinder, SISTR (serovar), PlasmidFinder, Abricate VFDB |
+| *Salmonella enterica* | MLST, AMRFinder, SISTR (serovar), PlasmidFinder |
+| *Shigella* spp. | MLST (Achtman), AMRFinder, ShigEiFinder (serotype/species), Mykrobe (S. sonnei genotyping), PlasmidFinder, pINV screen, IS element screen |
 | Other / unclassified | Species ID only (logged and skipped) |
 
 > **Kleborate:** runs full pathotype detection on all platforms. On macOS
@@ -31,42 +32,44 @@ Input assemblies (folder or samplesheet)
         │
         ▼
 ┌────────────────────┐
-│  1. SPECIES CHECK  │  Mash distance against 7-species reference sketch
+│  1. SPECIES CHECK  │  Mash distance against 10-genome reference sketch
 └────────────────────┘
         │
-   ┌────┴────┐
-   ▼         ▼
-E. coli   Salmonella   (other species logged and skipped)
-   │         │
-   ▼         ▼
-┌────────────────────────────────────────────────────────────┐
-│  2. SPECIES-SPECIFIC TYPING  (all tools run in parallel)   │
-│                                                            │
-│  E. coli                       Salmonella                  │
-│  ──────────────────────────    ───────────────────────     │
-│  MLST (achtman_4)              MLST (senterica_achtman_2)  │
-│  AMRFinder                     AMRFinder                   │
-│  ECTyper (O:H serotype)        SISTR (serovar)             │
-│  EzClermont (phylogroup)       PlasmidFinder               │
-│  Kleborate (pathotype)         Abricate VFDB               │
-│  PlasmidFinder                                             │
-│  Kaptive K-locus (G2/G3                                    │
-│    → G1/G4 on untypeables)                                 │
-└────────────────────────────────────────────────────────────┘
+   ┌────┼────────┐
+   ▼    ▼        ▼
+E. coli  Salmonella  Shigella   (other species logged and skipped)
+   │         │           │
+   ▼         ▼           ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│  2. SPECIES-SPECIFIC TYPING  (all tools run in parallel)                  │
+│                                                                           │
+│  E. coli                       Salmonella          Shigella               │
+│  ──────────────────────────    ──────────────────  ──────────────────     │
+│  MLST (achtman_4)              MLST (senterica_    MLST (achtman_4)       │
+│  AMRFinder                       achtman_2)        AMRFinder              │
+│  ECTyper (O:H serotype)        AMRFinder           ShigEiFinder           │
+│  EzClermont (phylogroup)       SISTR (serovar)       (serotype/species)   │
+│  Kleborate (pathotype)         PlasmidFinder       Mykrobe                │
+│  PlasmidFinder                                       (S. sonnei genotype) │
+│  Kaptive K-locus (G2/G3                            PlasmidFinder          │
+│    → G1/G4 on untypeables)                         pINV screen            │
+│                                                    IS element screen      │
+└───────────────────────────────────────────────────────────────────────────┘
         │
         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  3. PHYLOGENETICS  (per species, ≥ 3 samples; skip with         │
-│                    --skip_local_phylo)                          │
-│  SKA2 build (k=31) → whole-genome SNP alignment + SNP distance matrix  │
-│  → IQ-TREE ML tree (ModelFinder Plus automatic model selection) │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│  3. PHYLOGENETICS  (per species, ≥ 3 samples; skip with                  │
+│                    --skip_local_phylo)                                   │
+│  SKA2 build (k=31) → whole-genome SNP alignment + SNP distance matrix   │
+│  → IQ-TREE ML tree (ModelFinder Plus automatic model selection)          │
+└──────────────────────────────────────────────────────────────────────────┘
         │
         ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  4. AGGREGATE  (one TSV per species)                         │
 │  ecoli_typer_results.tsv                                     │
 │  salmonella_typer_results.tsv                                │
+│  shigella_typer_results.tsv                                  │
 │  AMRFinder hits classified by AMRrules into:                 │
 │    amrfinder_acquired_genes  — clinically relevant acquired  │
 │                                resistance genes              │
@@ -84,11 +87,10 @@ E. coli   Salmonella   (other species logged and skipped)
 │  Fig 2: Whole-genome SNP tree + ST/phylogroup strips + AMR panel     │
 │  Fig 3: Top acquired AMR genes (intrinsic genes excluded)            │
 │  Fig 4: Plasmid replicon types                                       │
-│  Fig 5: Virulence genes / pathotype (E. coli) or VFDB (Salmonella)  │
+│  Fig 5: Virulence genes / pathotype (E. coli only)                  │
 │  Fig 6: Pairwise whole-genome SNP distance heatmap                   │
 │  Fig 7: AMR drug class prevalence by sequence type (ST)              │
-│  Fig 8: AMR drug class prevalence by serovar (Salmonella) or         │
-│         Clermont phylogroup (E. coli)                                 │
+│  Fig 8: AMR drug class prevalence by serovar / phylogroup            │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -259,8 +261,9 @@ mamba install -c bioconda mash
 
 ### Step 6 — Build the Mash reference sketch
 
-This downloads 7 reference genomes from NCBI and builds the Mash sketch used
-for species identification. Run once before the first pipeline execution:
+This downloads 10 reference genomes from NCBI (2 *E. coli*, 3 *Salmonella*,
+4 *Shigella*, 1 *Klebsiella*) and builds the Mash sketch used for species
+identification. Run once before the first pipeline execution:
 
 ```bash
 bash assets/build_references.sh
@@ -379,6 +382,21 @@ results/
 ├── plasmidfinder_salmonella/
 │   └── *_plasmidfinder.tsv
 │
+├── mlst_shigella/
+│   └── *_shigella_mlst.tsv
+├── amrfinder_shigella/
+│   └── *_amrfinder.tsv
+├── shigeifinder/
+│   └── *_shigeifinder.tsv        ← ipaH, virulence plasmid, cluster, serotype, O/H antigens
+├── mykrobe/
+│   └── *_mykrobe_parsed.tsv      ← S. sonnei lineage/genotype (NA for other Shigella spp.)
+├── pinv_screen/
+│   └── *_pinv.tsv                ← pINV marker gene presence (icsA/virG, virF, ipaB/C/D)
+├── is_screen/
+│   └── *_is.tsv                  ← IS element copy counts (IS1, IS30, IS600, IS629…)
+├── plasmidfinder_shigella/
+│   └── *_plasmidfinder.tsv
+│
 ├── ska2_ecoli/
 │   ├── ska2_alignment.fasta       ← whole-genome SNP alignment (input to IQ-TREE)
 │   └── snp_matrix.tsv             ← pairwise whole-genome SNP distance matrix
@@ -394,8 +412,9 @@ results/
 │
 ├── ecoli_typer_results.tsv         ← Master results table (E. coli)
 ├── salmonella_typer_results.tsv    ← Master results table (Salmonella)
+├── shigella_typer_results.tsv      ← Master results table (Shigella)
 │
-│   Both tables include AMRFinder columns:
+│   All tables include AMRFinder columns:
 │     amrfinder_acquired_genes   — resistance genes (intrinsic excluded)
 │     amrfinder_intrinsic_genes  — wildtype/intrinsic genes (flagged, not excluded)
 │     amrfinder_genes            — all raw AMRFinder hits
@@ -403,12 +422,12 @@ results/
 ├── {species}_fig1_population_summary.{pdf,png}   ← ST · serotype · AMR drug classes · MDR
 │                                                     ST bars stacked by Clermont phylogroup (E. coli)
 │                                                     Serotype bars stacked by K-locus group (E. coli)
-│                                                     or MLST ST (Salmonella); "Other" bins retain
-│                                                     their fill colours (not collapsed to grey)
+│                                                     or MLST ST (Salmonella/Shigella); "Other" bins
+│                                                     retain their fill colours (not collapsed to grey)
 ├── {species}_fig3_amr_genes.{pdf,png}            ← Acquired AMR gene frequencies
 ├── {species}_fig4_plasmid_replicons.{pdf,png}    ← Plasmid replicon types
-├── {species}_fig5_virulence.{pdf,png}            ← Pathotype / virulence genes
-├── {species}_tree_amr.{pdf,png}                  ← Phylogeny + phylogroup + AMR heatmaps
+├── ecoli_fig5_virulence.{pdf,png}                ← Pathotype / virulence genes (E. coli only)
+├── {species}_tree_amr.{pdf,png}                  ← Phylogeny + phylogroup/ST strip + AMR heatmap
 └── {species}_snp_heatmap.{pdf,png}               ← Pairwise whole-genome SNP distance heatmap
 ```
 
@@ -462,11 +481,11 @@ conda install -c conda-forge graphviz
 
 ### macOS Apple Silicon (M1/M2/M3/M4)
 
-Some Bioconda packages (e.g. `abricate`) have no native arm64 build. Add the `arm64`
-profile to force Rosetta 2 emulation — tools run at near-native speed and the pipeline
-produces identical results to Linux. Kleborate will automatically use MLST-only mode
-on ARM64 if its full pathotype dependencies are unavailable, but all other tools run
-at full capability:
+Some Bioconda packages have no native arm64 build. Add the `arm64` profile to force
+Rosetta 2 emulation — tools run at near-native speed and the pipeline produces
+identical results to Linux. Kleborate will automatically use MLST-only mode on ARM64
+if its full pathotype dependencies are unavailable, but all other tools run at full
+capability:
 
 ```bash
 CONDA_SUBDIR=osx-64 nextflow run main.nf \
@@ -520,6 +539,7 @@ Example outputs from two real datasets:
 |---|---|---|---|
 | NHP gut isolates, The Gambia (Foster-Nyarko et al. 2020) | *Escherichia coli* | 98 | [View vignette](vignettes/ecoli_vignette.md) |
 | Clinical NTS isolates, The Gambia (Darboe et al. 2022) | *Salmonella enterica* | 99 | [View vignette](vignettes/salmonella_vignette.md) |
+| *(Shigella vignette in preparation)* | *Shigella* spp. | — | — |
 
 ---
 
@@ -542,7 +562,8 @@ And the tools it wraps:
 - **EC K-typing G2/G3**: Gladstone et al. (2026) Nature Microbiology; github.com/rgladstone/EC-K-typing
 - **EC K-typing G1/G4**: Foster-Nyarko E et al. github.com/efosternyarko/EC-K-typing-G1G4
 - **Kleborate**: Lam et al. (2021) Nature Communications; github.com/klebgenomics/Kleborate
-- **Abricate**: github.com/tseemann/abricate
+- **ShigEiFinder**: LanLab (2022) Microbial Genomics; github.com/LanLab/ShigEiFinder
+- **Mykrobe**: Hunt et al. (2015) Genome Biology 16:239; Hawkey et al. (2022) Microbial Genomics 8(6)
 - **SKA2**: github.com/bacpop/ska.rust
 - **IQ-TREE 2**: Minh et al. (2020) Molecular Biology and Evolution 37(5)
 - **AMRrules**: github.com/AMRverse/AMRrules
