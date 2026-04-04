@@ -10,7 +10,10 @@
 #   Salmonella Typhimurium LT2           GCF_000006945.2
 #   Salmonella Typhi CT18                GCF_000195995.1
 #   Salmonella Enteritidis P125109       GCF_000009505.1
-#   Shigella sonnei Ss046                GCF_000006925.2  (to flag Shigella)
+#   Shigella sonnei Ss046                GCF_000006925.2
+#   Shigella flexneri 2a 2457T           GCF_000007405.1
+#   Shigella boydii Sb227                GCF_000012025.1
+#   Shigella dysenteriae Sd197           GCF_000012005.1
 #   Klebsiella pneumoniae HS11286        GCF_000240185.1  (common enteric)
 #
 # Requirements:
@@ -106,8 +109,11 @@ download_genome GCF_000006945.2  "Salmonella_Typhimurium_LT2"
 download_genome GCF_000195995.1  "Salmonella_Typhi_CT18"
 download_genome GCF_000009505.1  "Salmonella_Enteritidis_P125109"
 
-# Shigella — rejected by species gate but identified in logs
+# Shigella — four species for robust species gate routing
 download_genome GCF_000006925.2  "Shigella_sonnei_Ss046"
+download_genome GCF_000007405.1  "Shigella_flexneri_2a_2457T"
+download_genome GCF_000012025.1  "Shigella_boydii_Sb227"
+download_genome GCF_000012005.1  "Shigella_dysenteriae_Sd197"
 
 # Klebsiella — rejected by species gate but identified in logs
 download_genome GCF_000240185.1  "Klebsiella_pneumoniae_HS11286"

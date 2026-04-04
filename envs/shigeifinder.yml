@@ -1,0 +1,7 @@
+name: shigeifinder
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - shigeifinder=1.3.5

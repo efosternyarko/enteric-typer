@@ -449,7 +449,6 @@ SALMONELLA_COLUMNS = [
     "amrfinder_acquired_genes",
     "amrfinder_intrinsic_genes",
     "amrfinder_virulence_genes",
-    "abricate_vfdb_genes",
     "amrfinder_genes",
     "amrfinder_drug_classes",
     "amrfinder_gene_classes",
@@ -463,25 +462,126 @@ SALMONELLA_COLUMNS = [
     "pw_tree_available",
 ]
 
+SHIGELLA_COLUMNS = [
+    "sample",
+    "mlst_scheme", "mlst_st", "mlst_st_complex",
+    "shigeifinder_ipaH", "shigeifinder_cluster", "shigeifinder_serotype",
+    "mykrobe_genotype", "mykrobe_lineage", "mykrobe_clade",
+    "mykrobe_subclade", "mykrobe_genotype_name", "mykrobe_confidence",
+    "amrfinder_acquired_genes",
+    "amrfinder_intrinsic_genes",
+    "amrfinder_virulence_genes",
+    "amrfinder_genes",
+    "amrfinder_drug_classes",
+    "amrfinder_gene_classes",
+    "plasmidfinder_replicons",
+    "pinv_present", "pinv_genes",
+    "is_elements",
+]
+
+
+def load_shigeifinder(files: list) -> dict:
+    """Parse ShigEiFinder output → {sample: {ipaH, cluster, serotype}}."""
+    data: dict = {}
+    for path in files:
+        try:
+            with open(path) as fh:
+                reader = csv.DictReader(fh, delimiter="\t")
+                for row in reader:
+                    sid = str(row.get("sample", "")).strip()
+                    if not sid:
+                        continue
+                    data[sid] = {
+                        "shigeifinder_ipaH":     str(row.get("ipaH",     "NA")).strip() or "NA",
+                        "shigeifinder_cluster":  str(row.get("Cluster",  "NA")).strip() or "NA",
+                        "shigeifinder_serotype": str(row.get("Serotype", "NA")).strip() or "NA",
+                    }
+        except Exception:
+            pass
+    return data
+
+
+def load_mykrobe_tsv(files: list) -> dict:
+    """Parse parse_mykrobe.py TSV → {sample: mykrobe field dict}."""
+    data: dict = {}
+    for path in files:
+        try:
+            with open(path) as fh:
+                reader = csv.DictReader(fh, delimiter="\t")
+                for row in reader:
+                    sid = str(row.get("sample", "")).strip()
+                    if not sid:
+                        continue
+                    data[sid] = {k: (str(v).strip() or "NA") for k, v in row.items()}
+        except Exception:
+            pass
+    return data
+
+
+def load_pinv(files: list) -> dict:
+    """Parse pINV screen output → {sample: {pinv_present, pinv_genes}}."""
+    genes_by_sample: dict = {}
+    for path in files:
+        try:
+            with open(path) as fh:
+                reader = csv.DictReader(fh, delimiter="\t")
+                for row in reader:
+                    sid  = str(row.get("sample", "")).strip()
+                    gene = str(row.get("gene",   "")).strip()
+                    if sid and gene and gene != "NA":
+                        genes_by_sample.setdefault(sid, set()).add(gene)
+        except Exception:
+            pass
+    return {
+        sid: {"pinv_present": "Y", "pinv_genes": ";".join(sorted(gs))}
+        for sid, gs in genes_by_sample.items()
+    }
+
+
+def load_is_screen(files: list) -> dict:
+    """Parse IS screen output → {sample: 'IS1(3);IS30(1)' string}."""
+    counts: dict = {}
+    for path in files:
+        try:
+            with open(path) as fh:
+                reader = csv.DictReader(fh, delimiter="\t")
+                for row in reader:
+                    sid     = str(row.get("sample",     "")).strip()
+                    elem    = str(row.get("IS_element", "")).strip()
+                    copies  = str(row.get("copies",     "")).strip()
+                    if sid and elem and elem != "NA":
+                        counts.setdefault(sid, {})[elem] = copies
+        except Exception:
+            pass
+    return {
+        sid: ";".join(f"{e}({c})" for e, c in sorted(d.items()))
+        for sid, d in counts.items()
+    }
+
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Aggregate enteric-typer results")
-    parser.add_argument("--species",       required=True, choices=["ecoli", "salmonella"])
+    parser.add_argument("--species",       required=True,
+                        choices=["ecoli", "salmonella", "shigella"])
     parser.add_argument("--mlst",          nargs="+", default=[])
     parser.add_argument("--amrfinder",     nargs="+", default=[])
     parser.add_argument("--serotyper",     nargs="+", default=[],
-                        help="ECTyper files (ecoli) or SISTR files (salmonella)")
+                        help="ECTyper (ecoli) / SISTR (salmonella) / ShigEiFinder (shigella)")
     parser.add_argument("--plasmidfinder", nargs="+", default=[])
     parser.add_argument("--ktype",         nargs="+", default=[],
                         help="parse_kaptive output TSV files (E. coli only)")
     parser.add_argument("--kleborate",     nargs="+", default=[],
                         help="Kleborate output TSV files (E. coli only)")
-    parser.add_argument("--abricate-vfdb", nargs="+", default=[], dest="abricate_vfdb",
-                        help="abricate VFDB output TSV files (Salmonella only)")
     parser.add_argument("--clermont",      nargs="+", default=[],
                         help="EzClermont phylotyping TSV files (E. coli only)")
+    parser.add_argument("--mykrobe",       nargs="+", default=[],
+                        help="parse_mykrobe.py TSV files (Shigella only)")
+    parser.add_argument("--pinv",          nargs="+", default=[],
+                        help="pINV screen TSV files (Shigella only)")
+    parser.add_argument("--is-screen",     nargs="+", default=[], dest="is_screen",
+                        help="IS element screen TSV files (Shigella only)")
     parser.add_argument("--pathogenwatch", default="NO_FILE")
     parser.add_argument("--st-complexes",  default=None)
     parser.add_argument("--amrrules",      default=None,
@@ -507,15 +607,20 @@ def main() -> None:
     ktype_data     = load_ktype(args.ktype)         if args.species == "ecoli" else {}
     kleb_data      = load_kleborate(args.kleborate) if args.species == "ecoli" else {}
     clermont_data  = load_clermont(args.clermont)   if args.species == "ecoli" else {}
-    abricate_data  = load_abricate(args.abricate_vfdb)
+    mykrobe_data   = load_mykrobe_tsv(args.mykrobe) if args.species == "shigella" else {}
+    pinv_data      = load_pinv(args.pinv)            if args.species == "shigella" else {}
+    is_data        = load_is_screen(args.is_screen)  if args.species == "shigella" else {}
     pw_data        = load_pathogenwatch(args.pathogenwatch)
 
     if args.species == "ecoli":
         sero_data = load_ectyper(args.serotyper)
         columns   = ECOLI_COLUMNS
-    else:
+    elif args.species == "salmonella":
         sero_data = load_sistr(args.serotyper)
         columns   = SALMONELLA_COLUMNS
+    else:
+        sero_data = load_shigeifinder(args.serotyper)
+        columns   = SHIGELLA_COLUMNS
 
     all_samples = sorted(set(
         list(mlst_data.keys()) +
@@ -524,7 +629,7 @@ def main() -> None:
         list(plasmid_data.keys()) +
         list(ktype_data.keys()) +
         list(kleb_data.keys()) +
-        list(abricate_data.keys()) +
+        list(mykrobe_data.keys()) +
         list(pw_data.keys())
     ))
 
@@ -562,7 +667,6 @@ def main() -> None:
                 "amrfinder_acquired_genes":   amr.get("acquired",   "NA"),
                 "amrfinder_intrinsic_genes":  amr.get("intrinsic",  "NA"),
                 "amrfinder_virulence_genes":  amr.get("virulence",  "NA"),
-                "abricate_vfdb_genes":        abricate_data.get(sid, "NA"),
                 "amrfinder_genes":            amr.get("all",        "NA"),
                 "amrfinder_drug_classes":   amr_classes.get(sid,        "NA"),
                 "amrfinder_gene_classes":   amr_gene_cls.get(sid,       "NA"),
@@ -602,7 +706,7 @@ def main() -> None:
                     "ectyper_qc":       sr.get("ectyper_qc",       "NA"),
                     "ectyper_evidence": sr.get("ectyper_evidence", "NA"),
                 })
-            else:
+            elif args.species == "salmonella":
                 row.update({
                     "sistr_serovar":         sr.get("sistr_serovar",         "NA"),
                     "sistr_serovar_antigen": sr.get("sistr_serovar_antigen", "NA"),
@@ -612,6 +716,23 @@ def main() -> None:
                     "sistr_H2":              sr.get("sistr_H2",              "NA"),
                     "sistr_cgmlst_ST":       sr.get("sistr_cgmlst_ST",       "NA"),
                     "sistr_qc":              sr.get("sistr_qc",              "NA"),
+                })
+            else:  # shigella
+                mk = mykrobe_data.get(sid, {})
+                pv = pinv_data.get(sid, {})
+                row.update({
+                    "shigeifinder_ipaH":     sr.get("shigeifinder_ipaH",     "NA"),
+                    "shigeifinder_cluster":  sr.get("shigeifinder_cluster",  "NA"),
+                    "shigeifinder_serotype": sr.get("shigeifinder_serotype", "NA"),
+                    "mykrobe_genotype":      mk.get("mykrobe_genotype",      "NA"),
+                    "mykrobe_lineage":       mk.get("mykrobe_lineage",       "NA"),
+                    "mykrobe_clade":         mk.get("mykrobe_clade",         "NA"),
+                    "mykrobe_subclade":      mk.get("mykrobe_subclade",      "NA"),
+                    "mykrobe_genotype_name": mk.get("mykrobe_genotype_name", "NA"),
+                    "mykrobe_confidence":    mk.get("mykrobe_confidence",    "NA"),
+                    "pinv_present":          pv.get("pinv_present",          "N"),
+                    "pinv_genes":            pv.get("pinv_genes",            "NA"),
+                    "is_elements":           is_data.get(sid,                "NA"),
                 })
 
             writer.writerow(row)

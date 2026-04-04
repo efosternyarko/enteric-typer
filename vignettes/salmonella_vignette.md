@@ -179,7 +179,6 @@ One row per sample. Key columns:
 | `sistr_qc` | SISTR QC status (PASS / WARNING / FAIL) |
 | `amrfinder_acquired_genes` | Acquired AMR genes (intrinsic genes excluded by AMRrules) |
 | `amrfinder_drug_classes` | Drug classes with acquired resistance |
-| `abricate_vfdb_genes` | Virulence factor genes detected by VFDB via Abricate |
 | `plasmidfinder_replicons` | Plasmid replicon types detected by PlasmidFinder |
 
 ---
@@ -265,24 +264,9 @@ association with OXA-48-type carbapenemase-encoding plasmids.
 
 ---
 
-### Fig 5 — Virulence genes
+### Fig 5 — Pairwise whole-genome SNP distance heatmap
 
-**Figure 5. Prevalence of virulence factor genes across 99 clinical *Salmonella
-enterica* isolates from The Gambia.**
-Horizontal bar chart showing the number of isolates carrying each virulence gene
-detected by Abricate against the VFDB database. Genes are ordered by prevalence.
-Core virulence factors (SPI-1 and SPI-2 invasion and effector secretion genes)
-are expected to be near-universal; variation in accessory virulence factors
-(e.g., adhesins, toxins, iron acquisition systems) reflects the serovar and
-lineage diversity of clinical Gambian NTS.
-
-![Virulence genes](img/salmonella/salmonella_fig5_virulence.png)
-
----
-
-### Fig 6 — Pairwise whole-genome SNP distance heatmap
-
-**Figure 6. Pairwise whole-genome SNP distance heatmap for 99 clinical
+**Figure 5. Pairwise whole-genome SNP distance heatmap for 99 clinical
 *Salmonella enterica* isolates from The Gambia.**
 Symmetric heatmap of pairwise SNP distances computed from the SKA2 whole-genome
 SNP alignment. Samples are ordered by hierarchical clustering. Colour intensity
@@ -294,9 +278,9 @@ or clonal expansions within the clinical setting.
 
 ---
 
-### Fig 7 — AMR drug class prevalence by sequence type
+### Fig 6 — AMR drug class prevalence by sequence type
 
-**Figure 7. AMR drug class prevalence by MLST sequence type (ST) across 99 clinical
+**Figure 6. AMR drug class prevalence by MLST sequence type (ST) across 99 clinical
 *Salmonella enterica* isolates from The Gambia.**
 Tile heatmap showing the percentage of isolates within each ST carrying acquired
 resistance to each drug class, as detected by AMRFinder Plus. Rows represent
@@ -310,14 +294,14 @@ Intrinsic resistance genes are excluded.
 
 ---
 
-### Fig 8 — AMR drug class prevalence by serovar
+### Fig 7 — AMR drug class prevalence by serovar
 
-**Figure 8. AMR drug class prevalence by serovar across 99 clinical
+**Figure 7. AMR drug class prevalence by serovar across 99 clinical
 *Salmonella enterica* isolates from The Gambia.**
 Tile heatmap showing the percentage of isolates within each SISTR-predicted
 serovar carrying acquired resistance to each drug class. Rows represent the
 most common serovars sorted by isolate count; columns represent drug classes
-sorted by overall prevalence. Colour and label encoding are identical to Fig 7.
+sorted by overall prevalence. Colour and label encoding are identical to Fig 6.
 
 ![AMR by serovar](img/salmonella/salmonella_fig8_amr_by_serovar.png)
 

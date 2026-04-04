@@ -912,6 +912,10 @@ def _marker_present(val) -> bool:
 
 def fig_virulence(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int = 25) -> None:
     is_ecoli = "ecoli" in prefix.lower() or "kleborate_pathovar" in df.columns
+    if "salmonella" in prefix.lower():
+        # Salmonella VFDB virulence genes are uninformative (core genes present in
+        # all isolates). Omitted pending systematic review of useful virulence markers.
+        return
     if is_ecoli:
         _fig_virulence_ecoli(df, outdir, prefix, top_n)
     else:

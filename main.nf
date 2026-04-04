@@ -4,7 +4,7 @@ nextflow.enable.dsl = 2
 /*
  * enteric-typer: species-gated genotyping workflow for Enterobacteriaceae
  *
- * Supports:  Escherichia coli  |  Salmonella enterica
+ * Supports:  Escherichia coli  |  Salmonella enterica  |  Shigella spp.
  *
  * Phase 1 – species gate (Mash) against reference sketch
  * Phase 2 – species-specific typing in parallel
@@ -22,25 +22,38 @@ include { AMRFINDER     as AMRFINDER_SALMONELLA     } from './modules/amrfinder'
 include { ECTYPER                                   } from './modules/ectyper'
 include { KLEBORATE                                 } from './modules/kleborate'
 include { EZCLERMONT                               } from './modules/ezclermont'
-include { ABRICATE                                  } from './modules/abricate'
+include { MYKROBE                                   } from './modules/mykrobe'
+include { PARSE_MYKROBE                             } from './modules/mykrobe'
+include { SHIGEIFINDER                              } from './modules/shigeifinder'
+include { PINV_SCREEN                               } from './modules/pinv_screen'
+include { IS_SCREEN                                 } from './modules/is_screen'
 include { KAPTIVE_G2G3                              } from './modules/kaptive'
 include { KAPTIVE_G1G4                              } from './modules/kaptive'
 include { PARSE_KAPTIVE                             } from './modules/kaptive'
 include { SISTR                                     } from './modules/sistr'
 include { PLASMIDFINDER as PLASMIDFINDER_ECOLI      } from './modules/plasmidfinder'
 include { PLASMIDFINDER as PLASMIDFINDER_SALMONELLA } from './modules/plasmidfinder'
+include { PLASMIDFINDER as PLASMIDFINDER_SHIGELLA   } from './modules/plasmidfinder'
 include { SKA2_BUILD    as SKA2_ECOLI               } from './modules/ska2'
 include { SKA2_BUILD    as SKA2_SALMONELLA          } from './modules/ska2'
+include { SKA2_BUILD    as SKA2_SHIGELLA            } from './modules/ska2'
 include { IQTREE        as IQTREE_ECOLI             } from './modules/iqtree'
 include { IQTREE        as IQTREE_SALMONELLA        } from './modules/iqtree'
+include { IQTREE        as IQTREE_SHIGELLA          } from './modules/iqtree'
 include { AGGREGATE     as AGGREGATE_ECOLI          } from './modules/aggregate'
 include { AGGREGATE     as AGGREGATE_SALMONELLA     } from './modules/aggregate'
+include { AGGREGATE     as AGGREGATE_SHIGELLA       } from './modules/aggregate'
+include { MLST          as MLST_SHIGELLA            } from './modules/mlst'
+include { AMRFINDER     as AMRFINDER_SHIGELLA       } from './modules/amrfinder'
 include { PLOT_SUMMARY      as PLOT_SUMMARY_ECOLI      } from './modules/plot_summary'
 include { PLOT_SUMMARY      as PLOT_SUMMARY_SALMONELLA } from './modules/plot_summary'
+include { PLOT_SUMMARY      as PLOT_SUMMARY_SHIGELLA   } from './modules/plot_summary'
 include { TREE_ANNOTATION   as TREE_ANNOTATION_ECOLI      } from './modules/tree_annotation'
 include { TREE_ANNOTATION   as TREE_ANNOTATION_SALMONELLA } from './modules/tree_annotation'
+include { TREE_ANNOTATION   as TREE_ANNOTATION_SHIGELLA   } from './modules/tree_annotation'
 include { SNP_HEATMAP       as SNP_HEATMAP_ECOLI          } from './modules/snp_heatmap'
 include { SNP_HEATMAP       as SNP_HEATMAP_SALMONELLA      } from './modules/snp_heatmap'
+include { SNP_HEATMAP       as SNP_HEATMAP_SHIGELLA        } from './modules/snp_heatmap'
 
 // ── Parameter validation ──────────────────────────────────────────────────────
 if (!params.samplesheet && !params.input_dir) {
@@ -76,8 +89,8 @@ if (isArm64 && usingConda && !usingArm64) {
     ════════════════════════════════════════════════════════════════
     WARNING: Apple Silicon detected without the arm64 profile.
 
-    Some Bioconda packages (e.g. abricate) have no native arm64
-    build and will fail to install, killing the pipeline.
+    Some Bioconda packages have no native arm64 build and will fail
+    to install, killing the pipeline.
 
     Rerun with the arm64 profile to install osx-64 envs via Rosetta:
       -profile ${workflow.profile},arm64
@@ -148,15 +161,17 @@ workflow {
     ch_classified.branch {
         ecoli:      it[2] == 'E_coli'              && it[3] < 0.05f
         salmonella: it[2] == 'Salmonella_enterica'  && it[3] < 0.05f
+        shigella:   it[2] == 'Shigella'            && it[3] < 0.05f
         other:      true
     }.set { ch_branched }
 
     ch_branched.other.subscribe { id, fasta, species, dist ->
-        log.warn "SKIPPED '${id}': best match = ${species} (Mash dist = ${String.format('%.4f', dist)}) — not E. coli or Salmonella within threshold"
+        log.warn "SKIPPED '${id}': best match = ${species} (Mash dist = ${String.format('%.4f', dist)}) — not E. coli, Salmonella, or Shigella within threshold"
     }
 
     ch_ecoli      = ch_branched.ecoli.map      { id, fasta, sp, d -> tuple(id, fasta) }
     ch_salmonella = ch_branched.salmonella.map { id, fasta, sp, d -> tuple(id, fasta) }
+    ch_shigella   = ch_branched.shigella.map   { id, fasta, sp, d -> tuple(id, fasta) }
 
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 2a: E. coli typing (parallel per sample)
@@ -212,8 +227,26 @@ workflow {
     MLST_SALMONELLA(ch_salmonella,          'senterica_achtman_2')
     AMRFINDER_SALMONELLA(ch_salmonella,     'Salmonella')
     SISTR(ch_salmonella)
-    ABRICATE(ch_salmonella, 'vfdb', 80, 90)
     PLASMIDFINDER_SALMONELLA(ch_salmonella, 'enterobacteriaceae')
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PHASE 2d: Shigella typing (parallel per sample)
+    // ─────────────────────────────────────────────────────────────────────────
+    ch_pinv_db          = file("${projectDir}/assets/pinv_markers.fasta",
+                               checkIfExists: true)
+    ch_is_db            = file("${projectDir}/assets/shigella_is_elements.fasta",
+                               checkIfExists: true)
+    ch_parse_mykrobe_script = file("${projectDir}/bin/parse_mykrobe.py",
+                               checkIfExists: true)
+
+    MLST_SHIGELLA(ch_shigella,             'ecoli_achtman_4')
+    AMRFINDER_SHIGELLA(ch_shigella,        'Escherichia')
+    SHIGEIFINDER(ch_shigella)
+    PLASMIDFINDER_SHIGELLA(ch_shigella,    'enterobacteriaceae')
+    MYKROBE(ch_shigella)
+    PARSE_MYKROBE(MYKROBE.out, ch_parse_mykrobe_script)
+    PINV_SCREEN(ch_shigella, ch_pinv_db)
+    IS_SCREEN(ch_shigella, ch_is_db)
 
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 3: Core-SNP phylogenetics (SKA2 + IQ-TREE) per species
@@ -221,24 +254,31 @@ workflow {
     // ─────────────────────────────────────────────────────────────────────────
     ch_ecoli_tree            = Channel.value(file('NO_FILE'))
     ch_salmonella_tree       = Channel.value(file('NO_FILE'))
+    ch_shigella_tree         = Channel.value(file('NO_FILE'))
     ch_ecoli_snp_matrix      = Channel.value(file('NO_FILE'))
     ch_salmonella_snp_matrix = Channel.value(file('NO_FILE'))
+    ch_shigella_snp_matrix   = Channel.value(file('NO_FILE'))
 
     if (!params.skip_local_phylo) {
         ch_ecoli_fastas      = ch_ecoli.map      { id, fasta -> fasta }.collect().filter { it.size() > 0 }
         ch_salmonella_fastas = ch_salmonella.map { id, fasta -> fasta }.collect().filter { it.size() > 0 }
+        ch_shigella_fastas   = ch_shigella.map   { id, fasta -> fasta }.collect().filter { it.size() > 0 }
 
         SKA2_ECOLI(ch_ecoli_fastas)
         SKA2_SALMONELLA(ch_salmonella_fastas)
+        SKA2_SHIGELLA(ch_shigella_fastas)
 
         IQTREE_ECOLI(SKA2_ECOLI.out.alignment)
         IQTREE_SALMONELLA(SKA2_SALMONELLA.out.alignment)
+        IQTREE_SHIGELLA(SKA2_SHIGELLA.out.alignment)
 
         ch_ecoli_tree      = IQTREE_ECOLI.out.treefile.ifEmpty(file('NO_FILE'))
         ch_salmonella_tree = IQTREE_SALMONELLA.out.treefile.ifEmpty(file('NO_FILE'))
+        ch_shigella_tree   = IQTREE_SHIGELLA.out.treefile.ifEmpty(file('NO_FILE'))
 
         ch_ecoli_snp_matrix      = SKA2_ECOLI.out.snp_matrix.ifEmpty(file('NO_FILE'))
         ch_salmonella_snp_matrix = SKA2_SALMONELLA.out.snp_matrix.ifEmpty(file('NO_FILE'))
+        ch_shigella_snp_matrix   = SKA2_SHIGELLA.out.snp_matrix.ifEmpty(file('NO_FILE'))
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -255,8 +295,8 @@ workflow {
         file("${projectDir}/assets/amrrules/Escherichia_coli.tsv"),
         'ecoli',
         KLEBORATE.out.map          { id, f -> f }.collect().ifEmpty([]),
-        [],
-        EZCLERMONT.out.map         { id, f -> f }.collect().ifEmpty([])
+        EZCLERMONT.out.map         { id, f -> f }.collect().ifEmpty([]),
+        [], [], []                 // mykrobe, pinv, is (shigella only)
     )
 
     AGGREGATE_SALMONELLA(
@@ -269,16 +309,32 @@ workflow {
         file("${projectDir}/assets/salmonella_st_complexes.tsv"),
         file("${projectDir}/assets/amrrules/Salmonella_enterica.tsv"),
         'salmonella',
+        [], [],                    // kleborate, clermont (ecoli only)
+        [], [], []                 // mykrobe, pinv, is (shigella only)
+    )
+
+    AGGREGATE_SHIGELLA(
+        MLST_SHIGELLA.out.map            { id, f -> f }.collect().ifEmpty([]),
+        AMRFINDER_SHIGELLA.out.map       { id, f -> f }.collect().ifEmpty([]),
+        SHIGEIFINDER.out.map             { id, f -> f }.collect().ifEmpty([]),
+        PLASMIDFINDER_SHIGELLA.out.map   { id, f -> f }.collect().ifEmpty([]),
         [],
-        ABRICATE.out.map               { id, f -> f }.collect().ifEmpty([]),
-        []
+        'NO_FILE',
+        file("${projectDir}/assets/sonnei_st_complexes.tsv"),
+        file("${projectDir}/assets/amrrules/Escherichia_coli.tsv"),
+        'shigella',
+        [], [],                    // kleborate, clermont (ecoli only)
+        PARSE_MYKROBE.out.map        { id, f -> f }.collect().ifEmpty([]),
+        PINV_SCREEN.out.map          { id, f -> f }.collect().ifEmpty([]),
+        IS_SCREEN.out.map            { id, f -> f }.collect().ifEmpty([])
     )
 
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 5: Summary plots (always runs — no API keys required)
     // ─────────────────────────────────────────────────────────────────────────
-    PLOT_SUMMARY_ECOLI(AGGREGATE_ECOLI.out.results,      'ecoli')
+    PLOT_SUMMARY_ECOLI(AGGREGATE_ECOLI.out.results,         'ecoli')
     PLOT_SUMMARY_SALMONELLA(AGGREGATE_SALMONELLA.out.results, 'salmonella')
+    PLOT_SUMMARY_SHIGELLA(AGGREGATE_SHIGELLA.out.results,   'shigella')
 
     TREE_ANNOTATION_ECOLI(
         ch_ecoli_tree,
@@ -290,6 +346,11 @@ workflow {
         AGGREGATE_SALMONELLA.out.results,
         'salmonella'
     )
+    TREE_ANNOTATION_SHIGELLA(
+        ch_shigella_tree,
+        AGGREGATE_SHIGELLA.out.results,
+        'shigella'
+    )
 
     // SNP distance heatmaps — .filter skips species with no samples (NO_FILE sentinel)
     if (!params.skip_local_phylo) {
@@ -300,6 +361,10 @@ workflow {
         SNP_HEATMAP_SALMONELLA(
             ch_salmonella_snp_matrix.filter { it.name != 'NO_FILE' },
             'salmonella'
+        )
+        SNP_HEATMAP_SHIGELLA(
+            ch_shigella_snp_matrix.filter   { it.name != 'NO_FILE' },
+            'shigella'
         )
     }
 
@@ -322,22 +387,6 @@ workflow.onError {
 
     // Known error patterns → fix messages
     def KNOWN_ERRORS = [
-        [
-            pattern: /perl-socket|LibMambaUnsatisfiable.*abricate|abricate.*LibMambaUnsatisfiable/,
-            title:   "abricate conda install failed (Apple Silicon / arm64)",
-            fix:     """\
-                abricate has no native arm64 Bioconda build. Install the osx-64
-                version via Rosetta 2 by adding the arm64 profile:
-
-                  nextflow run main.nf ... -profile conda,arm64
-
-                If that still fails (older libmamba reads CONDA_SUBDIR instead of
-                the --platform flag):
-
-                  CONDA_SUBDIR=osx-64 nextflow run main.nf ... -profile conda
-
-                You only need to do this once; the environment is then cached."""
-        ],
         [
             pattern: /Failed to create Conda environment/,
             title:   "Conda environment creation failed",
