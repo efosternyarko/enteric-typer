@@ -19,9 +19,6 @@ process AMRFINDER {
 
     script:
     """
-    # Update database if not already present in the container/conda env
-    amrfinder -u 2>/dev/null || true
-
     amrfinder \\
         --nucleotide ${fasta} \\
         --organism   ${organism} \\

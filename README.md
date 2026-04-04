@@ -283,15 +283,6 @@ Expected runtime: 1–5 minutes depending on bandwidth.
 > then follow the Linux instructions. Alternatively use the `docker` profile
 > with Docker Desktop for Windows.
 
-> **Dropbox / OneDrive / Google Drive users:** if your project or output
-> directory lives inside a cloud-sync folder, Nextflow's `work/` directory
-> will also be synced in real time. This causes severe slowdowns as the
-> sync client fights the pipeline over thousands of temporary files.
-> Always redirect the work directory outside the sync folder with `-w`:
-> ```bash
-> nextflow run main.nf ... -w ~/nf_work
-> ```
-
 ### For a given folder of assemblies
 
 ```bash
@@ -299,15 +290,13 @@ Expected runtime: 1–5 minutes depending on bandwidth.
 nextflow run main.nf \
     --input_dir /path/to/assemblies/ \
     --outdir    results/ \
-    -profile conda \
-    -w          ~/nf_work
+    -profile conda
 
 # Apple Silicon Mac (M1/M2/M3/M4) — prefix CONDA_SUBDIR and add arm64 profile
 CONDA_SUBDIR=osx-64 nextflow run main.nf \
     --input_dir /path/to/assemblies/ \
     --outdir    results/ \
-    -profile conda,arm64 \
-    -w          ~/nf_work
+    -profile conda,arm64
 
 # Windows (Docker Desktop) — no conda required
 nextflow run main.nf \
