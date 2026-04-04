@@ -925,12 +925,13 @@ def fig_virulence(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int = 25) 
 def _fig_virulence_ecoli(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int) -> None:
     has_pathovar  = "kleborate_pathovar" in df.columns
     has_markers   = any(col in df.columns for col, _ in PATHOVAR_MARKERS)
+    has_amr_vir   = "amrfinder_virulence_genes" in df.columns
 
-    if not has_pathovar and not has_markers:
+    if not has_pathovar and not has_markers and not has_amr_vir:
         print("WARNING: no virulence data — skipping virulence plot", file=sys.stderr)
         return
 
-    n_panels = sum([has_pathovar, has_markers])
+    n_panels = sum([has_pathovar, has_markers, has_amr_vir])
     fig_w    = 5.5 * n_panels
     fig_h    = max(5.0, top_n * 0.28 + 2.0)
     fig, axes = plt.subplots(1, n_panels, figsize=(fig_w, fig_h))
@@ -992,6 +993,34 @@ def _fig_virulence_ecoli(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int
         ax.set_title("B. Virulence gene markers (InPEC)", fontweight="bold")
         ax.set_xlim(0, 108)
         ax.xaxis.set_major_locator(plt.MultipleLocator(20))
+
+    # ── Panel C: Top AMRFinder virulence genes ────────────────────────────────
+    if has_amr_vir:
+        ax = axes[ax_idx]
+        gene_ctr: Counter = Counter()
+        for val in df["amrfinder_virulence_genes"]:
+            for g in parse_list(val):
+                gene_ctr[g] += 1
+
+        if not gene_ctr:
+            ax.text(0.5, 0.5, "No virulence genes\ndetected (AMRFinder)",
+                    ha="center", va="center", transform=ax.transAxes,
+                    color="grey", fontsize=9)
+            ax.axis("off")
+        else:
+            top   = gene_ctr.most_common(top_n)
+            glbls = [g for g, _ in top]
+            gpcts = [100 * v / n for _, v in top]
+            gy    = np.arange(len(glbls))
+            ax.barh(gy, gpcts, color="#e07b54", edgecolor="white",
+                    linewidth=0.3, height=0.76)
+            ax.set_yticks(gy)
+            ax.set_yticklabels(glbls, fontsize=7.5, fontstyle="italic")
+            ax.invert_yaxis()
+            ax.set_xlabel("Prevalence (% of isolates)")
+            ax.set_title("C. Virulence genes (AMRFinder)", fontweight="bold")
+            ax.set_xlim(0, 108)
+            ax.xaxis.set_major_locator(plt.MultipleLocator(20))
 
     fig.suptitle("E. coli virulence profiling", fontsize=11, fontweight="bold", y=1.01)
     plt.tight_layout()

@@ -22,6 +22,7 @@ process AMRFINDER {
     amrfinder \\
         --nucleotide ${fasta} \\
         --organism   ${organism} \\
+        --plus \\
         --threads    ${task.cpus} \\
         --name       ${sample_id} \\
         --output     ${sample_id}_amrfinder.tsv \\
