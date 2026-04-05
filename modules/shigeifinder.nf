@@ -21,6 +21,9 @@ process SHIGEIFINDER {
 
     script:
     """
+    # Build BLAST database on first use (idempotent; exits 0)
+    shigeifinder --update_db 2>/dev/null || true
+
     shigeifinder \\
         -i      ${fasta} \\
         -t      ${task.cpus} \\

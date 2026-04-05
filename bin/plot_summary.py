@@ -797,12 +797,8 @@ def _panel_shigella_is(df: pd.DataFrame, ax: plt.Axes) -> None:
     ax.set_xticks(range(n_elem))
     ax.set_xticklabels(elem_order, rotation=40, ha="right", fontsize=7)
     ax.set_yticks(range(n_samp))
-    ax.set_yticklabels(df2["sample"].tolist(), fontsize=5.5)
-    ax.tick_params(length=0)
-
-    # Colour ytick labels by species
-    for lbl, sp in zip(ax.get_yticklabels(), df2["_species"]):
-        lbl.set_color(_SHIGELLA_SPECIES_PALETTE.get(sp, "#333333"))
+    ax.set_yticklabels(df2["sample"].tolist(), fontsize=7)
+    ax.tick_params(length=0, axis="both")
 
     ax.set_title("B.  IS element landscape", fontweight="bold")
 
@@ -1225,6 +1221,8 @@ _DC_ABBREV: dict[str, str] = {
     "COLISTIN":            "COL",
     "NITROFURAN":          "NIT",
     "STREPTOTHRICIN":      "STR",
+    "LINCOSAMIDE":         "LIN",
+    "STREPTOGRAMIN":       "SGM",
 }
 _EXCLUDE_DC = {"EFFLUX"}   # near-universal in E. coli — excluded from heatmaps
 
@@ -1593,19 +1591,8 @@ def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     ax.set_xticks(range(n_feat))
     ax.set_xticklabels(feat_cols, rotation=45, ha="right", fontsize=7)
     ax.set_yticks(range(n_samp))
-    ax.set_yticklabels(df2["sample"].tolist(), fontsize=6)
+    ax.set_yticklabels(df2["sample"].tolist(), fontsize=7)
     ax.tick_params(length=0)
-
-    # Colour ytick labels by species (replaces colour strip)
-    for lbl, sp in zip(ax.get_yticklabels(), df2["_species"]):
-        lbl.set_color(_SHIGELLA_SPECIES_PALETTE.get(sp, "#333333"))
-
-    # Species legend
-    sp_handles = [mpatches.Patch(color=v, label=k)
-                  for k, v in _SHIGELLA_SPECIES_PALETTE.items() if k != "Unknown"]
-    leg = ax.legend(handles=sp_handles, title="Species", fontsize=7, title_fontsize=7.5,
-                    loc="upper left", bbox_to_anchor=(1.01, 1), frameon=False)
-    ax.add_artist(leg)
 
     # Presence legend
     pres_handles = [
@@ -1691,12 +1678,8 @@ def fig_shigella_is_elements(df: pd.DataFrame, outdir: Path, prefix: str) -> Non
     ax.set_xticks(range(n_elem))
     ax.set_xticklabels(elem_order, rotation=40, ha="right", fontsize=8)
     ax.set_yticks(range(n_samp))
-    ax.set_yticklabels(df2["sample"].tolist(), fontsize=6)
+    ax.set_yticklabels(df2["sample"].tolist(), fontsize=7)
     ax.tick_params(length=0)
-
-    # Colour ytick labels by species (replaces colour strip)
-    for lbl, sp in zip(ax.get_yticklabels(), df2["_species"]):
-        lbl.set_color(_SHIGELLA_SPECIES_PALETTE.get(sp, "#333333"))
 
     # Species legend
     sp_handles = [mpatches.Patch(color=v, label=k)
