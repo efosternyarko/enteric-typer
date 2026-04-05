@@ -1587,23 +1587,32 @@ def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     n_samp, n_feat = mat.shape
     cell_w, cell_h = 0.55, 0.22
     fig_w = max(9,  n_feat * cell_w + 4.5)
-    fig_h = max(4,  n_samp * cell_h + 2.5)
+    # Extra height: bottom margin reserved for group brackets/labels below x-ticks
+    fig_h = max(5,  n_samp * cell_h + 3.5)
 
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
-    # ── Heatmap ───────────────────────────────────────────────────────────────
+    # ── Heatmap — vector rectangles (crisp in PDF; imshow embeds a raster bitmap) ──
     dark_red = "#9b2226"
     light    = "#f8f9fa"
-    cmap_bin = LinearSegmentedColormap.from_list("shig_feat", [light, dark_red])
-    ax.imshow(mat.values.astype(float), aspect="auto", cmap=cmap_bin,
-              vmin=0, vmax=1, interpolation="none")
+    for ri in range(n_samp):
+        for ci in range(n_feat):
+            color = dark_red if mat.iloc[ri, ci] > 0.5 else light
+            ax.add_patch(mpatches.Rectangle(
+                (ci - 0.5, ri - 0.5), 1.0, 1.0,
+                facecolor=color, edgecolor="white", linewidth=0.3,
+            ))
+    ax.set_xlim(-0.5, n_feat - 0.5)
+    ax.set_ylim(n_samp - 0.5, -0.5)   # row 0 at top, matching imshow convention
 
     # Column dividers between feature groups (after ipaH+plasmid, after PINV genes)
     boundaries = [1.5, 1.5 + len(_PINV_GENES)]
     for xb in boundaries:
         ax.axvline(xb, color="white", lw=2.5)
 
-    # Column group labels above the heatmap (between top spine and title)
+    # Column group brackets and labels — placed BELOW the x-tick labels.
+    # Use explicit bottom margin via subplots_adjust (tight_layout cannot reliably
+    # account for annotation_clip=False artists placed far outside the axes).
     group_info = [
         (0,   1,                       "ShigEiFinder"),
         (2,   2 + len(_PINV_GENES) - 1, "pINV genes"),
@@ -1611,10 +1620,10 @@ def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     ]
     for x0, x1, label in group_info:
         mid = (x0 + x1) / 2
-        ax.annotate(label, xy=(mid, 1.08), xycoords=("data", "axes fraction"),
-                    ha="center", va="bottom", fontsize=7.5, fontweight="bold",
+        ax.annotate(label, xy=(mid, -0.28), xycoords=("data", "axes fraction"),
+                    ha="center", va="top", fontsize=7.5, fontweight="bold",
                     annotation_clip=False)
-        ax.annotate("", xy=(x0 - 0.4, 1.04), xytext=(x1 + 0.4, 1.04),
+        ax.annotate("", xy=(x0 - 0.4, -0.18), xytext=(x1 + 0.4, -0.18),
                     xycoords=("data", "axes fraction"),
                     arrowprops=dict(arrowstyle="-", color="#555", lw=1),
                     annotation_clip=False)
@@ -1634,9 +1643,9 @@ def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     ax.legend(handles=pres_handles, fontsize=7, loc="upper left",
               bbox_to_anchor=(1.01, 0.55), frameon=False)
 
-    ax.set_title("Shigella virulence & invasion feature panel", fontsize=10,
-                 fontweight="bold", pad=28)
-    plt.tight_layout()
+    ax.set_title("Shigella virulence & invasion feature panel", fontsize=10, fontweight="bold")
+    # Reserve 28% at bottom for group brackets/labels; tight_layout handles top/left/right
+    plt.tight_layout(rect=[0, 0.28, 1, 1])
     _save(fig, outdir, f"{prefix}_fig9_shigella_features")
 
 
