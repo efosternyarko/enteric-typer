@@ -1707,7 +1707,9 @@ def fig_shigella_is_elements(df: pd.DataFrame, outdir: Path, prefix: str) -> Non
 def _save(fig: plt.Figure, outdir: Path, stem: str) -> None:
     for ext in ("pdf", "png"):
         p = outdir / f"{stem}.{ext}"
-        dpi = 150 if ext == "png" else None   # PDF is vector; PNG needs explicit DPI for crisp cells
+        # imshow data in PDFs is always rasterized by matplotlib; set explicit DPI so
+        # the embedded bitmap is crisp (300 for PDF, 150 for screen PNG).
+        dpi = 300 if ext == "pdf" else 150
         fig.savefig(p, dpi=dpi, bbox_inches="tight")
         print(f"  Saved: {p}", file=sys.stderr)
     plt.close(fig)
