@@ -1603,7 +1603,9 @@ def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
                 facecolor=color, edgecolor="white", linewidth=0.3,
             ))
     ax.set_xlim(-0.5, n_feat - 0.5)
-    ax.set_ylim(n_samp - 0.5, -0.5)   # row 0 at top, matching imshow convention
+    ax.set_ylim(-0.5, n_samp - 0.5)
+    ax.invert_yaxis()          # row 0 at top; invert_yaxis keeps x-ticks at visual bottom
+    ax.xaxis.tick_bottom()     # explicit — prevents x-axis drifting to top on inverted axes
 
     # Column dividers between feature groups (after ipaH+plasmid, after PINV genes)
     boundaries = [1.5, 1.5 + len(_PINV_GENES)]
@@ -1620,17 +1622,17 @@ def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     ]
     for x0, x1, label in group_info:
         mid = (x0 + x1) / 2
-        ax.annotate(label, xy=(mid, -0.28), xycoords=("data", "axes fraction"),
+        ax.annotate(label, xy=(mid, -0.38), xycoords=("data", "axes fraction"),
                     ha="center", va="top", fontsize=7.5, fontweight="bold",
                     annotation_clip=False)
-        ax.annotate("", xy=(x0 - 0.4, -0.18), xytext=(x1 + 0.4, -0.18),
+        ax.annotate("", xy=(x0 - 0.4, -0.28), xytext=(x1 + 0.4, -0.28),
                     xycoords=("data", "axes fraction"),
                     arrowprops=dict(arrowstyle="-", color="#555", lw=1),
                     annotation_clip=False)
 
     # Axes ticks
     ax.set_xticks(range(n_feat))
-    ax.set_xticklabels(feat_cols, rotation=45, ha="right", fontsize=7)
+    ax.set_xticklabels(feat_cols, rotation=90, ha="center", fontsize=7)
     ax.set_yticks(range(n_samp))
     ax.set_yticklabels(df2["sample"].tolist(), fontsize=7)
     ax.tick_params(length=0)
@@ -1645,7 +1647,7 @@ def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
 
     ax.set_title("Shigella virulence & invasion feature panel", fontsize=10, fontweight="bold")
     # Reserve 28% at bottom for group brackets/labels; tight_layout handles top/left/right
-    plt.tight_layout(rect=[0, 0.28, 1, 1])
+    plt.tight_layout(rect=[0, 0.32, 1, 1])
     _save(fig, outdir, f"{prefix}_fig9_shigella_features")
 
 
