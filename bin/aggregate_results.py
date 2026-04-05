@@ -494,8 +494,10 @@ def load_shigeifinder(files: list) -> dict:
             with open(path) as fh:
                 reader = csv.DictReader(fh, delimiter="\t")
                 for row in reader:
-                    # column name may be SAMPLE (native) or sample (fallback)
-                    sid = (str(row.get("SAMPLE", "") or row.get("sample", "")).strip())
+                    # ShigEiFinder v1.3.5 uses "#SAMPLE" as the header (comment-style)
+                    sid = (str(row.get("#SAMPLE", "")
+                               or row.get("SAMPLE", "")
+                               or row.get("sample", "")).strip())
                     if not sid:
                         continue
                     def _get(col: str) -> str:

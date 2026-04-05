@@ -1427,16 +1427,23 @@ def _infer_shigella_species(df: pd.DataFrame) -> pd.Series:
        (covers the two most common species when ShigEiFinder fails)
     """
     def _classify(row):
-        # 1. ShigEiFinder columns
+        # 1. ShigEiFinder serotype — encoded as SF*/SB*/SD*/SS prefix
+        sero = str(row.get("shigeifinder_serotype", "")).strip().upper()
+        if sero not in {"", "NA", "NAN", "NONE", "-"}:
+            if sero.startswith("SF"):               return "S. flexneri"
+            if sero.startswith("SB"):               return "S. boydii"
+            if sero.startswith("SD"):               return "S. dysenteriae"
+            if sero.startswith("SS") or "SONNEI" in sero: return "S. sonnei"
+        # 2. ShigEiFinder cluster / full name in either column
         for col in ("shigeifinder_cluster", "shigeifinder_serotype"):
             val = str(row.get(col, "")).lower()
             if "sonnei"      in val: return "S. sonnei"
             if "flexneri"    in val: return "S. flexneri"
             if "dysenteriae" in val or "dysenteri" in val: return "S. dysenteriae"
             if "boydii"      in val: return "S. boydii"
-        # 2. Mykrobe lineage fallback
+        # 3. Mykrobe lineage — only reliable as a species-level signal for S. sonnei
+        #    (lineage3 = canonical S. sonnei pandemic clade; lineage2 is ambiguous)
         lin = str(row.get("mykrobe_lineage", "")).lower()
-        if lin.startswith("lineage2"): return "S. flexneri"
         if lin.startswith("lineage3"): return "S. sonnei"
         return "Unknown"
     return df.apply(_classify, axis=1)
