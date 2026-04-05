@@ -304,6 +304,16 @@ def plot_tree_amr(
                     vir_sources.append(("kleb", col))
         if "amrfinder_virulence_genes" in meta.columns:
             vir_gene_col = "amrfinder_virulence_genes"
+    elif species == "shigella":
+        # Shigella virulence markers: ShigEiFinder ipaH, virulence plasmid, pINV screen
+        for col, label in [("shigeifinder_ipaH",            "ipaH"),
+                            ("shigeifinder_virulence_plasmid", "Vir. plasmid"),
+                            ("pinv_present",                   "pINV genes")]:
+            if col in meta.columns:
+                vir_labels.append(label)
+                vir_sources.append(("kleb", col))   # reuse "kleb" path (presence check)
+        if "amrfinder_virulence_genes" in meta.columns:
+            vir_gene_col = "amrfinder_virulence_genes"
     else:
         vir_gene_col = next((c for c in ("amrfinder_virulence_genes", "abricate_vfdb_genes")
                              if c in meta.columns), None)
@@ -597,7 +607,8 @@ def plot_tree_amr(
         )
 
     # ── Title ─────────────────────────────────────────────────────────────────
-    sp_label = "E. coli" if species == "ecoli" else "Salmonella enterica"
+    sp_label = {"ecoli": "Escherichia coli", "salmonella": "Salmonella enterica",
+                "shigella": "Shigella spp."}.get(species, species)
     fig.suptitle(
         f"{sp_label} whole-genome SNP phylogeny with virulence & AMR profiles  (n = {n} isolates)",
         fontsize=11, fontweight="bold", y=1.01,
@@ -621,7 +632,7 @@ def main() -> None:
     p.add_argument("--metadata", "-m", required=True,  help="enteric-typer results TSV")
     p.add_argument("--outdir",   "-o", default=".",    help="Output directory")
     p.add_argument("--prefix",   "-p", default="enteric_typer")
-    p.add_argument("--species",  "-s", required=True,  choices=["ecoli", "salmonella"])
+    p.add_argument("--species",  "-s", required=True,  choices=["ecoli", "salmonella", "shigella"])
     args = p.parse_args()
 
     outdir = Path(args.outdir)

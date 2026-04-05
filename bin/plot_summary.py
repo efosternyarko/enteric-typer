@@ -183,15 +183,24 @@ def get_phylogroup(st: str) -> str:
 # ── Figure 1: 4-panel population summary ─────────────────────────────────────
 
 def fig_population_summary(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
-    # Extra width (16 → 18) gives each panel room for its outside legend
+    is_shigella   = "shigeifinder_serotype" in df.columns
+    is_salmonella = "sistr_serovar" in df.columns or "salmonella" in prefix.lower()
+    sp_label = ("Shigella spp." if is_shigella
+                else "Salmonella enterica" if is_salmonella
+                else "Escherichia coli")
+
     fig = plt.figure(figsize=(18, 11))
     gs  = gridspec.GridSpec(2, 2, figure=fig, hspace=0.50, wspace=0.55)
-    _panel_st(df,   fig.add_subplot(gs[0, 0]))
-    _panel_sero(df, fig.add_subplot(gs[0, 1]))
-    _panel_amr(df,  fig.add_subplot(gs[1, 0]))
-    _panel_mdr(df,  fig.add_subplot(gs[1, 1]))
-    sp_label = ("Salmonella enterica" if ("sistr_serovar" in df.columns or "salmonella" in prefix.lower())
-                else "E. coli")
+    _panel_st(df, fig.add_subplot(gs[0, 0]))
+
+    if is_shigella:
+        # Panel B: IS element landscape (replaces K-locus/serotype panel for Shigella)
+        _panel_shigella_is(df, fig.add_subplot(gs[0, 1]))
+    else:
+        _panel_sero(df, fig.add_subplot(gs[0, 1]))
+
+    _panel_amr(df, fig.add_subplot(gs[1, 0]))
+    _panel_mdr(df, fig.add_subplot(gs[1, 1]))
     fig.suptitle(f"{sp_label} genomic surveillance summary  (n = {len(df)} isolates)",
                  fontsize=12, fontweight="bold", y=1.01)
     _save(fig, outdir, f"{prefix}_fig1_population_summary")
@@ -201,8 +210,10 @@ def _panel_st(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
     sts = df["mlst_st"].apply(clean_st) if "mlst_st" in df.columns else pd.Series(
         ["Unknown"] * len(df), index=df.index)
 
-    # Detect species: Salmonella has sistr columns; E. coli has kleborate/ectyper columns
-    is_salmonella = "sistr_serovar" in df.columns or "sistr_cgmlst_ST" in df.columns
+    # Detect species: Shigella > Salmonella > E. coli
+    is_shigella   = "shigeifinder_serotype" in df.columns
+    is_salmonella = (not is_shigella and
+                     ("sistr_serovar" in df.columns or "sistr_cgmlst_ST" in df.columns))
 
     ctr = Counter(sts)
     unk_n = ctr.pop("Unknown", 0)
@@ -215,6 +226,51 @@ def _panel_st(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
     if unk_n:    labels.append("Unknown");  values.append(unk_n)
 
     y = np.arange(len(labels))
+
+    if is_shigella:
+        # Stacked bars by Shigella species using _SHIGELLA_SPECIES_PALETTE
+        sp_series = _infer_shigella_species(df)
+        top_st_set = set(dict(top).keys())
+        label_sp_counts: dict[str, Counter] = {}
+        for st_val, sp_val in zip(sts, sp_series):
+            if st_val == "Unknown":
+                lbl = "Unknown"
+            elif st_val in top_st_set:
+                lbl = st_val
+            else:
+                lbl = "Other"
+            label_sp_counts.setdefault(lbl, Counter())[sp_val] += 1
+
+        sp_order = list(_SHIGELLA_SPECIES_PALETTE.keys())
+        seen_sp: dict[str, str] = {}
+        for y_idx, lbl in enumerate(labels):
+            x = 0
+            sp_ctr = label_sp_counts.get(lbl, Counter())
+            for sp in sorted(sp_ctr.keys(),
+                             key=lambda s: sp_order.index(s) if s in sp_order else 99):
+                cnt = sp_ctr[sp]
+                color = _SHIGELLA_SPECIES_PALETTE.get(sp, "#adb5bd")
+                ax.barh(y_idx, cnt, left=x, height=0.78,
+                        color=color, edgecolor="white", linewidth=0.6)
+                seen_sp.setdefault(sp, color)
+                x += cnt
+
+        ax.set_yticks(y); ax.set_yticklabels(labels, fontsize=8)
+        ax.invert_yaxis()
+        ax.set_xlabel("Number of isolates", fontsize=8.5)
+        ax.set_title("A. MLST sequence types", fontweight="bold")
+        ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True, nbins=5))
+        ax.tick_params(axis="both", length=3)
+        for spine in ("top", "right", "left"):
+            ax.spines[spine].set_visible(False)
+        ax.spines["bottom"].set_linewidth(0.8)
+        ax.yaxis.set_ticks_position("none")
+        patches = [mpatches.Patch(facecolor=c, label=sp, linewidth=0)
+                   for sp, c in seen_sp.items()]
+        ax.legend(handles=patches, title="Species", fontsize=7, title_fontsize=7.5,
+                  bbox_to_anchor=(1.02, 1), loc="upper left",
+                  frameon=False, handlelength=1.2, handleheight=1.2)
+        return
 
     if is_salmonella:
         # Single-hue gradient: most frequent ST = deepest, least frequent = lightest
@@ -683,6 +739,72 @@ def _panel_mdr(df: pd.DataFrame, ax: plt.Axes) -> None:
         mpatches.Patch(color="#e63946", label="MDR  (≥ 3 classes)", linewidth=0),
         mpatches.Patch(color="#457b9d", label="Non-MDR",             linewidth=0),
     ], fontsize=7.5, frameon=False)
+
+
+def _panel_shigella_is(df: pd.DataFrame, ax: plt.Axes) -> None:
+    """Compact IS element copy-number heatmap for fig1 Panel B (Shigella)."""
+    import re as _re
+
+    if "is_elements" not in df.columns:
+        ax.set_title("B   IS element landscape"); return
+
+    df2 = df.copy()
+    df2["_species"]  = _infer_shigella_species(df2)
+    df2["_serotype"] = df2.get(
+        "shigeifinder_serotype", pd.Series("NA", index=df2.index)
+    ).fillna("NA").astype(str)
+    sp_rank = {s: i for i, s in enumerate(_SHIGELLA_SPECIES_PALETTE)}
+    df2["_sp_rank"] = df2["_species"].map(sp_rank).fillna(99)
+    df2 = df2.sort_values(["_sp_rank", "_serotype", "sample"]).reset_index(drop=True)
+
+    def _parse_is(val) -> dict:
+        counts: dict = {}
+        if pd.isna(val) or str(val).strip() in {"", "NA", "nan", "-"}:
+            return counts
+        for tok in str(val).split(";"):
+            m = _re.match(r'([A-Za-z0-9_]+)\((\d+)\)', tok.strip())
+            if m:
+                counts[m.group(1)] = int(m.group(2))
+        return counts
+
+    parsed = df2["is_elements"].apply(_parse_is)
+    found  = set()
+    for d in parsed:
+        found.update(d.keys())
+    elem_order = [e for e in _IS_ELEMENTS if e in found] + sorted(found - set(_IS_ELEMENTS))
+    if not elem_order:
+        ax.set_title("B   IS element landscape"); return
+
+    mat = pd.DataFrame(
+        [{e: d.get(e, 0) for e in elem_order} for d in parsed],
+        columns=elem_order, index=df2.index,
+    )
+    n_samp, n_elem = mat.shape
+    vmax = max(mat.values.max(), 1)
+    cmap = LinearSegmentedColormap.from_list("is_cmap", ["#f8f9fa", "#1d3557"])
+    ax.imshow(mat.values.astype(float), aspect="auto", cmap=cmap,
+              vmin=0, vmax=vmax, interpolation="none")
+
+    # Copy numbers in cells
+    for ri in range(n_samp):
+        for ci in range(n_elem):
+            val = int(mat.iloc[ri, ci])
+            if val > 0:
+                tc = "white" if val > vmax * 0.6 else "#1d3557"
+                ax.text(ci, ri, str(val), ha="center", va="center",
+                        fontsize=5.5, color=tc, fontweight="bold")
+
+    ax.set_xticks(range(n_elem))
+    ax.set_xticklabels(elem_order, rotation=40, ha="right", fontsize=7)
+    ax.set_yticks(range(n_samp))
+    ax.set_yticklabels(df2["sample"].tolist(), fontsize=5.5)
+    ax.tick_params(length=0)
+
+    # Colour ytick labels by species
+    for lbl, sp in zip(ax.get_yticklabels(), df2["_species"]):
+        lbl.set_color(_SHIGELLA_SPECIES_PALETTE.get(sp, "#333333"))
+
+    ax.set_title("B.  IS element landscape", fontweight="bold")
 
 
 # ── Figure 2: Resistome heatmap ───────────────────────────────────────────────
@@ -1474,14 +1596,9 @@ def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     ax.set_yticklabels(df2["sample"].tolist(), fontsize=6)
     ax.tick_params(length=0)
 
-    # ── Species colour strip on left ──────────────────────────────────────────
-    strip_x = -2.8
-    for i, sp in enumerate(df2["_species"]):
-        col = _SHIGELLA_SPECIES_PALETTE.get(sp, "#adb5bd")
-        ax.add_patch(mpatches.FancyBboxPatch(
-            (strip_x - 0.45, i - 0.45), 0.9, 0.9,
-            boxstyle="round,pad=0.05", color=col, clip_on=False,
-            transform=ax.transData))
+    # Colour ytick labels by species (replaces colour strip)
+    for lbl, sp in zip(ax.get_yticklabels(), df2["_species"]):
+        lbl.set_color(_SHIGELLA_SPECIES_PALETTE.get(sp, "#333333"))
 
     # Species legend
     sp_handles = [mpatches.Patch(color=v, label=k)
@@ -1577,24 +1694,20 @@ def fig_shigella_is_elements(df: pd.DataFrame, outdir: Path, prefix: str) -> Non
     ax.set_yticklabels(df2["sample"].tolist(), fontsize=6)
     ax.tick_params(length=0)
 
-    # Species colour strip on left
-    strip_x = -0.9
-    for i, sp in enumerate(df2["_species"]):
-        col = _SHIGELLA_SPECIES_PALETTE.get(sp, "#adb5bd")
-        ax.add_patch(mpatches.FancyBboxPatch(
-            (strip_x - 0.35, i - 0.45), 0.7, 0.9,
-            boxstyle="round,pad=0.05", color=col, clip_on=False,
-            transform=ax.transData))
+    # Colour ytick labels by species (replaces colour strip)
+    for lbl, sp in zip(ax.get_yticklabels(), df2["_species"]):
+        lbl.set_color(_SHIGELLA_SPECIES_PALETTE.get(sp, "#333333"))
+
+    # Species legend
+    sp_handles = [mpatches.Patch(color=v, label=k)
+                  for k, v in _SHIGELLA_SPECIES_PALETTE.items() if k != "Unknown"]
+    ax.legend(handles=sp_handles, title="Species", fontsize=7, title_fontsize=7.5,
+              loc="upper left", bbox_to_anchor=(1.12, 1), frameon=False)
 
     # Colour bar
     cbar = fig.colorbar(im, ax=ax, shrink=0.5, pad=0.02)
     cbar.set_label("Copy number", fontsize=7.5)
     cbar.ax.tick_params(labelsize=7)
-
-    sp_handles = [mpatches.Patch(color=v, label=k)
-                  for k, v in _SHIGELLA_SPECIES_PALETTE.items() if k != "Unknown"]
-    ax.legend(handles=sp_handles, title="Species", fontsize=7, title_fontsize=7.5,
-              loc="upper left", bbox_to_anchor=(1.12, 1), frameon=False)
 
     ax.set_title("Shigella IS element landscape", fontsize=10, fontweight="bold")
     plt.tight_layout()

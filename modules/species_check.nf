@@ -24,22 +24,41 @@ process SPECIES_CHECK {
     script:
     """
     mash dist ${reference_sketch} ${fasta} 2>/dev/null \\
-        | sort -k3,3n \\
-        | head -1 \\
-        | awk '{
-            # Extract filename component from the reference path
+        | awk '
+        {
+            # Map each reference to a species group
             n = split(\$1, a, "/")
             ref = a[n]
-            # Strip any FASTA extension
             gsub(/\\.(fasta|fa|fna|fas|fsa)\$/, "", ref)
-            # Map reference name prefix to a canonical species label
-            if      (ref ~ /^[Ee]_?[Cc]oli/ || ref ~ /^Escherichia/) species = "E_coli"
-            else if (ref ~ /^[Ss]almonella/)                          species = "Salmonella_enterica"
-            else if (ref ~ /^[Ss]higella/)                            species = "Shigella"
-            else if (ref ~ /^[Kk]lebsiella/)                          species = "Klebsiella"
-            else if (ref ~ /^[Ee]nterobacter/)                        species = "Enterobacter"
-            else                                                       species = ref
-            print species "\\t" \$3
+            if      (ref ~ /^[Ee]_?[Cc]oli/ || ref ~ /^Escherichia/) sp = "E_coli"
+            else if (ref ~ /^[Ss]almonella/)                          sp = "Salmonella_enterica"
+            else if (ref ~ /^[Ss]higella/)                            sp = "Shigella"
+            else if (ref ~ /^[Kk]lebsiella/)                          sp = "Klebsiella"
+            else if (ref ~ /^[Ee]nterobacter/)                        sp = "Enterobacter"
+            else                                                       sp = ref
+
+            dist = \$3 + 0
+            # Track best (lowest) distance seen per species group
+            if (!(sp in best) || dist < best[sp])
+                best[sp] = dist
+        }
+        END {
+            # Shigella-priority rule: Shigella and E. coli are phylogenetically
+            # interleaved; if ANY Shigella reference is within 0.025 the sample
+            # is Shigella, even when an E. coli reference is marginally closer.
+            if ("Shigella" in best && best["Shigella"] < 0.025) {
+                print "Shigella\\t" best["Shigella"]
+            } else {
+                best_sp   = ""
+                best_dist = 1.0
+                for (sp in best) {
+                    if (best[sp] < best_dist) {
+                        best_dist = best[sp]
+                        best_sp   = sp
+                    }
+                }
+                print best_sp "\\t" best_dist
+            }
         }' > ${sample_id}_species.txt
 
     # Guard: ensure file is non-empty

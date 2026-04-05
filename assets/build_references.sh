@@ -13,7 +13,7 @@
 #   Salmonella Typhimurium LT2             GCF_000006945.2
 #   Salmonella Typhi CT18                  GCF_000195995.1
 #   Salmonella Enteritidis P125109         GCF_000009505.1
-#   Shigella sonnei Ss046                  GCF_000006925.2
+#   Shigella sonnei ATCC 29930             GCF_002950395.1  (Ss046/GCF_000006925.2 returns wrong sequence)
 #   Shigella flexneri 2a 2457T             GCF_000007405.1
 #   Shigella boydii Sb227                  GCF_000012025.1
 #   Shigella dysenteriae Sd197             GCF_000012005.1
@@ -125,7 +125,9 @@ download_genome GCF_000195995.1  "Salmonella_Typhi_CT18"
 download_genome GCF_000009505.1  "Salmonella_Enteritidis_P125109"
 
 # Shigella — four species for robust species gate routing
-download_genome GCF_000006925.2  "Shigella_sonnei_Ss046"
+# NOTE: GCF_000006925.2 (Ss046) returns S. flexneri 2a 301 sequence from NCBI;
+#       GCF_002950395.1 (ATCC 29930) is a verified complete S. sonnei genome.
+download_genome GCF_002950395.1  "Shigella_sonnei_ATCC29930"
 download_genome GCF_000007405.1  "Shigella_flexneri_2a_2457T"
 download_genome GCF_000012025.1  "Shigella_boydii_Sb227"
 download_genome GCF_000012005.1  "Shigella_dysenteriae_Sd197"
