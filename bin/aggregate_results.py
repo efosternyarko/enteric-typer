@@ -268,7 +268,7 @@ def load_kleborate(files: list[str]) -> dict[str, dict]:
     Parse Kleborate v3 --preset escherichia output (with --trim_headers).
 
     Extracts:
-      kleborate_phylogroup  — Clermont type (clermont_type column)
+      clermont_phylogroup   — Clermont type (clermont_type column; also exposed as kleborate_phylogroup for legacy)
       kleborate_pathovar    — pathotype: STEC/EPEC/ETEC/EIEC/EHEC or '-'
       kleborate_Stx1        — Stx1 gene hits (';'-separated) or '-'
       kleborate_Stx2        — Stx2 gene hits
@@ -296,8 +296,8 @@ def load_kleborate(files: list[str]) -> dict[str, dict]:
                 if not sid:
                     continue
                 results[sid] = {
-                    # Phylogroup
-                    "kleborate_phylogroup": _na(
+                    # Phylogroup (from Kleborate's internal EzClermont run; used only as fallback)
+                    "clermont_phylogroup": _na(
                         _get(row, "clermont_type",
                              "escherichia__ezclermont__clermont_type") or None
                     ),
@@ -419,7 +419,7 @@ def _na(v) -> str:
 ECOLI_COLUMNS = [
     "sample",
     "mlst_scheme", "mlst_st", "mlst_st_complex",
-    "kleborate_phylogroup",
+    "clermont_phylogroup",
     "kleborate_pathovar",
     "kleborate_Stx1", "kleborate_Stx2", "kleborate_eae",
     "kleborate_ipaH", "kleborate_LT", "kleborate_ST_toxin",
@@ -695,8 +695,8 @@ def main() -> None:
 
             if args.species == "ecoli":
                 row.update({
-                    "kleborate_phylogroup":  (clermont_pg if clermont_pg
-                                              else kleb.get("kleborate_phylogroup", "NA")),
+                    "clermont_phylogroup":   (clermont_pg if clermont_pg
+                                              else kleb.get("clermont_phylogroup", "NA")),
                     "kleborate_pathovar":    kleb.get("kleborate_pathovar",    "NA"),
                     "kleborate_Stx1":        kleb.get("kleborate_Stx1",        "NA"),
                     "kleborate_Stx2":        kleb.get("kleborate_Stx2",        "NA"),

@@ -231,12 +231,12 @@ def _panel_st(df: pd.DataFrame, ax: plt.Axes, top_n: int = 15) -> None:
         # E. coli: stacked bars by phylogroup — every bar (including "Other") is
         # split by the actual phylogroup composition of isolates in that bin.
         has_real_pg = (
-            "kleborate_phylogroup" in df.columns and
-            df["kleborate_phylogroup"].notna().any() and
-            df["kleborate_phylogroup"].astype(str).str.strip().ne("NA").any()
+            "clermont_phylogroup" in df.columns and
+            df["clermont_phylogroup"].notna().any() and
+            df["clermont_phylogroup"].astype(str).str.strip().ne("NA").any()
         )
         if has_real_pg:
-            pg_series = df["kleborate_phylogroup"].astype(str).str.strip()
+            pg_series = df["clermont_phylogroup"].astype(str).str.strip()
             pg_series = pg_series.where(
                 ~pg_series.isin({"NA", "nan", "None", "-", ""}), "Unknown")
             title_suffix = " (Clermont)"
@@ -1132,10 +1132,15 @@ def _amrnet_matrix(
                         result.add(_DC_ABBREV.get(part, part))
         return result
 
+    # Values that are QC flags rather than real phylogroup/serovar labels
+    _NON_GROUP = {"EC_control_fail", "Unknown", "NA", "nan", "-", ""}
+
     df = df.copy()
     df["_row"] = df[row_col].fillna("Unknown").apply(
         lambda v: clean_st(v) if "st" in row_col.lower() else str(v)
     )
+    # Normalise EzClermont control-fail to "Unknown" so it doesn't appear as a row
+    df["_row"] = df["_row"].apply(lambda v: "Unknown" if v in _NON_GROUP else v)
     dc_col = next((c for c in ["amrfinder_drug_classes", "amr_classes",
                                 "drug_classes", "resistance_classes"]
                    if c in df.columns), None)
@@ -1144,7 +1149,7 @@ def _amrnet_matrix(
     df["_cls"] = df[dc_col].apply(_parse)
 
     counts  = Counter(df["_row"])
-    ordered = [r for r, _ in counts.most_common() if r != "Unknown"][:top_n]
+    ordered = [r for r, _ in counts.most_common() if r not in _NON_GROUP][:top_n]
     if "Unknown" in counts:
         ordered.append("Unknown")
 
@@ -1234,8 +1239,8 @@ def fig_amrnet_by_group(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
         sp       = "Salmonella enterica"
         grp_name = "serovar"
         top_n    = 15
-    elif "kleborate_phylogroup" in df.columns:
-        row_col  = "kleborate_phylogroup"
+    elif "clermont_phylogroup" in df.columns:
+        row_col  = "clermont_phylogroup"
         sp       = "Escherichia coli"
         grp_name = "Clermont phylogroup"
         top_n    = 10

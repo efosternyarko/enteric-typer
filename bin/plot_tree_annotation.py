@@ -228,14 +228,16 @@ def plot_tree_amr(
               file=sys.stderr)
 
     # ── Phylogroup per tip ────────────────────────────────────────────────────
-    # Prefer kleborate_phylogroup directly; fall back to ST-lookup
+    # Prefer clermont_phylogroup directly; fall back to ST-lookup
+    _CLERMONT_FAIL = {"EC_control_fail", "EC_control_fail"}
     def _tip_phylogroup(tip: str) -> str:
         if tip not in meta.index:
             return "Unknown"
-        if "kleborate_phylogroup" in meta.columns:
-            pg = str(meta.loc[tip, "kleborate_phylogroup"]).strip()
-            if pg not in _SENTINEL and pg not in {"NA", "nan", "None"}:
-                return pg
+        for col in ("clermont_phylogroup", "kleborate_phylogroup"):   # accept old column name too
+            if col in meta.columns:
+                pg = str(meta.loc[tip, col]).strip()
+                if pg not in _SENTINEL and pg not in {"NA", "nan", "None"} and pg not in _CLERMONT_FAIL:
+                    return pg
         if "mlst_st" in meta.columns:
             st = _clean_st(meta.loc[tip, "mlst_st"])
             return ST_PHYLOGROUP.get(st, "Unknown")
