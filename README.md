@@ -637,7 +637,7 @@ Example outputs from real datasets:
 |---|---|---|---|
 | NHP gut isolates, The Gambia (Foster-Nyarko et al. 2020) | *Escherichia coli* | 98 | [View vignette](vignettes/ecoli_vignette.md) |
 | Clinical NTS isolates, The Gambia (Darboe et al. 2022) | *Salmonella enterica* | 99 | [View vignette](vignettes/salmonella_vignette.md) |
-| Diverse *Shigella* — all four species (test dataset) | *Shigella* spp. | 15 | *(in preparation)* |
+| Diverse *Shigella* — all four species (reference genomes) | *Shigella* spp. | 15 | [View vignette](vignettes/shigella_vignette.md) |
 
 ---
 
