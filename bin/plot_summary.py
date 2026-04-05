@@ -14,11 +14,15 @@ Produces (PDF + PNG at 300 dpi):
   {prefix}_fig5_virulence            — virulence gene prevalence
   {prefix}_fig7_amr_by_st            — AMRnet-style tile heatmap: drug class % by MLST ST
   {prefix}_fig8_amr_by_group         — AMRnet-style tile heatmap: drug class % by serovar/phylogroup
+  {prefix}_fig9_shigella_serotypes   — Shigella species + serotype composition (stacked bars)
+  {prefix}_fig10_shigella_features   — Shigella virulence & invasion feature panel (binary heatmap)
+  {prefix}_fig11_shigella_is         — Shigella IS element landscape (copy-number heatmap)
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -1244,6 +1248,11 @@ def fig_amrnet_by_group(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
         sp       = "Escherichia coli"
         grp_name = "Clermont phylogroup"
         top_n    = 10
+    elif "shigeifinder_serotype" in df.columns:
+        row_col  = "shigeifinder_serotype"
+        sp       = "Shigella spp."
+        grp_name = "serotype"
+        top_n    = 15
     else:
         return
 
@@ -1257,6 +1266,339 @@ def fig_amrnet_by_group(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
                     f"{sp} — AMR drug class prevalence by {grp_name}")
     plt.tight_layout()
     _save(fig, outdir, f"{prefix}_fig8_amr_by_group")
+
+
+# ── Shigella-specific figures ─────────────────────────────────────────────────
+
+_SHIGELLA_SPECIES_PALETTE = {
+    "S. sonnei":      "#e63946",
+    "S. flexneri":    "#457b9d",
+    "S. dysenteriae": "#f4a261",
+    "S. boydii":      "#2a9d8f",
+    "Unknown":        "#adb5bd",
+}
+
+# PINV markers screened by pinv_screen module (gene names as stored in pinv_genes column)
+_PINV_GENES = ["icsA_virG", "virF", "virB", "ipaB", "ipaC", "ipaD"]
+# IS elements screened by is_screen module
+_IS_ELEMENTS = ["IS1", "IS1A", "IS30", "IS186", "IS600", "IS629"]
+
+
+def _infer_shigella_species(df: pd.DataFrame) -> pd.Series:
+    """Return a Series of 'S. sonnei' / 'S. flexneri' / etc. from ShigEiFinder columns."""
+    def _classify(row):
+        for col in ("shigeifinder_cluster", "shigeifinder_serotype"):
+            val = str(row.get(col, "")).lower()
+            if "sonnei"      in val: return "S. sonnei"
+            if "flexneri"    in val: return "S. flexneri"
+            if "dysenteriae" in val or "dysenteri" in val: return "S. dysenteriae"
+            if "boydii"      in val: return "S. boydii"
+        return "Unknown"
+    return df.apply(_classify, axis=1)
+
+
+def fig_shigella_serotypes(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
+    """
+    Fig 9 — Shigella species + serotype composition.
+
+    Horizontal stacked bar chart: one bar per species, stacked by serotype.
+    Serotype labels from shigeifinder_serotype; species inferred from cluster/serotype.
+    """
+    if "shigeifinder_serotype" not in df.columns:
+        return
+
+    df2 = df.copy()
+    df2["_species"]  = _infer_shigella_species(df2)
+    df2["_serotype"] = df2["shigeifinder_serotype"].fillna("Unknown").astype(str).str.strip()
+    df2["_serotype"] = df2["_serotype"].where(
+        ~df2["_serotype"].isin({"", "NA", "nan", "None", "-"}), "Unknown")
+
+    species_order = [s for s in _SHIGELLA_SPECIES_PALETTE if s != "Unknown"]
+    # Only species that have samples
+    species_order = [s for s in species_order if (df2["_species"] == s).any()]
+    if not species_order:
+        return
+
+    # Per-species serotype counts
+    all_serotypes = sorted(df2["_serotype"].unique())
+    # Build a colour palette for serotypes using tab20 / paired
+    sero_colors = {s: c for s, c in zip(
+        all_serotypes,
+        plt.cm.tab20.colors[:len(all_serotypes)]   # type: ignore[attr-defined]
+    )}
+
+    fig_h = max(3, len(species_order) * 0.9 + 1.5)
+    fig, ax = plt.subplots(figsize=(9, fig_h))
+
+    lefts = {sp: 0 for sp in species_order}
+    for sero in all_serotypes:
+        counts = [int((df2[df2["_species"] == sp]["_serotype"] == sero).sum())
+                  for sp in species_order]
+        bars = ax.barh(species_order, counts, left=[lefts[sp] for sp in species_order],
+                       color=sero_colors[sero], edgecolor="white", linewidth=0.5,
+                       label=sero if any(c > 0 for c in counts) else "_nolegend_")
+        # Annotate count inside bar if wide enough
+        for bar, n in zip(bars, counts):
+            if n > 0 and bar.get_width() >= 1:
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + bar.get_height() / 2,
+                        str(n), ha="center", va="center", fontsize=7, color="white",
+                        fontweight="bold")
+        for sp, cnt in zip(species_order, counts):
+            lefts[sp] += cnt
+
+    # Total n per species on right
+    for i, sp in enumerate(species_order):
+        total = int((df2["_species"] == sp).sum())
+        ax.text(lefts[sp] + 0.15, i, f"n={total}", va="center", fontsize=7.5, color="#444")
+
+    ax.set_yticks(range(len(species_order)))
+    ax.set_yticklabels([f"$\\it{{{s.replace(' ', '~')}}}$" for s in species_order], fontsize=9)
+    ax.set_xlabel("Number of isolates", fontsize=9)
+    ax.set_title("Shigella species and serotype composition", fontsize=10, fontweight="bold")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    # Legend — only real serotypes, outside plot
+    handles, labels = ax.get_legend_handles_labels()
+    seen, h2, l2 = set(), [], []
+    for h, l in zip(handles, labels):
+        if l not in seen and not l.startswith("_"):
+            seen.add(l); h2.append(h); l2.append(l)
+    ncol = max(1, len(l2) // 8 + 1)
+    ax.legend(h2, l2, title="Serotype", fontsize=6.5, title_fontsize=7,
+              loc="lower right", bbox_to_anchor=(1, 1), ncol=ncol, frameon=False)
+
+    plt.tight_layout()
+    _save(fig, outdir, f"{prefix}_fig9_shigella_serotypes")
+
+
+def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
+    """
+    Fig 10 — Shigella virulence & invasion feature panel.
+
+    Binary presence/absence heatmap modelled on S. flexneri eLife (2015) and
+    S. sonnei Nature Communications (2021) comparative genomics figures.
+    Columns: ipaH | virulence plasmid | pINV invasion genes | IS elements.
+    Rows: samples sorted by species then serotype, with species colour strip.
+    """
+    needed = {"shigeifinder_ipaH", "shigeifinder_virulence_plasmid", "pinv_genes", "is_elements"}
+    if not needed.intersection(df.columns):
+        return
+
+    df2 = df.copy()
+    df2["_species"]  = _infer_shigella_species(df2)
+    df2["_serotype"] = df2.get("shigeifinder_serotype", pd.Series("NA", index=df2.index)).fillna("NA").astype(str)
+    # Sort: species order → serotype → sample name
+    sp_rank = {s: i for i, s in enumerate(_SHIGELLA_SPECIES_PALETTE)}
+    df2["_sp_rank"] = df2["_species"].map(sp_rank).fillna(99)
+    df2 = df2.sort_values(["_sp_rank", "_serotype", "sample"]).reset_index(drop=True)
+
+    def _present(val) -> int:
+        v = str(val).strip().lower()
+        return 0 if v in {"na", "nan", "none", "-", "", "0", "no", "n", "absent"} else 1
+
+    # ── Build binary matrix ───────────────────────────────────────────────────
+    records = []
+    for _, row in df2.iterrows():
+        r: dict = {}
+        r["ipaH"]         = _present(row.get("shigeifinder_ipaH", ""))
+        r["Vir.\nplasmid"] = _present(row.get("shigeifinder_virulence_plasmid", ""))
+
+        pinv_raw = str(row.get("pinv_genes", "")).lower()
+        for g in _PINV_GENES:
+            # Match gene name allowing _/- variation and partial tokens
+            r[g] = 1 if re.search(r'\b' + re.escape(g.lower().replace("_", ".?")) + r'\b',
+                                   pinv_raw.replace("_", ".")) else 0
+
+        is_raw = str(row.get("is_elements", ""))
+        for elem in _IS_ELEMENTS:
+            r[elem] = 1 if re.search(r'\b' + re.escape(elem) + r'\b', is_raw, re.I) else 0
+        records.append(r)
+
+    feat_cols = (["ipaH", "Vir.\nplasmid"] +
+                 [g.replace("_", "\n") for g in _PINV_GENES] +
+                 _IS_ELEMENTS)
+    # Rename keys to match feat_cols
+    records2 = []
+    for rec in records:
+        r2 = {}
+        r2["ipaH"]          = rec["ipaH"]
+        r2["Vir.\nplasmid"] = rec["Vir.\nplasmid"]
+        for g in _PINV_GENES:
+            r2[g.replace("_", "\n")] = rec[g]
+        for e in _IS_ELEMENTS:
+            r2[e] = rec[e]
+        records2.append(r2)
+
+    mat = pd.DataFrame(records2, columns=feat_cols)
+
+    n_samp, n_feat = mat.shape
+    cell_w, cell_h = 0.55, 0.22
+    fig_w = max(9,  n_feat * cell_w + 4.5)
+    fig_h = max(4,  n_samp * cell_h + 2.5)
+
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+
+    # ── Heatmap ───────────────────────────────────────────────────────────────
+    dark_red = "#9b2226"
+    light    = "#f8f9fa"
+    cmap_bin = LinearSegmentedColormap.from_list("shig_feat", [light, dark_red])
+    ax.imshow(mat.values.astype(float), aspect="auto", cmap=cmap_bin,
+              vmin=0, vmax=1, interpolation="none")
+
+    # Column dividers between feature groups (after ipaH+plasmid, after PINV genes)
+    boundaries = [1.5, 1.5 + len(_PINV_GENES)]
+    for xb in boundaries:
+        ax.axvline(xb, color="white", lw=2.5)
+
+    # Column group labels above the heatmap
+    group_info = [
+        (0,   1,                       "ShigEiFinder"),
+        (2,   2 + len(_PINV_GENES) - 1, "pINV genes"),
+        (2 + len(_PINV_GENES), n_feat - 1, "IS elements"),
+    ]
+    for x0, x1, label in group_info:
+        mid = (x0 + x1) / 2
+        ax.annotate(label, xy=(mid, -0.8), xycoords=("data", "axes fraction"),
+                    ha="center", va="bottom", fontsize=7.5, fontweight="bold",
+                    annotation_clip=False)
+        ax.annotate("", xy=(x0 - 0.4, -0.6), xytext=(x1 + 0.4, -0.6),
+                    xycoords=("data", "axes fraction"),
+                    arrowprops=dict(arrowstyle="-", color="#555", lw=1),
+                    annotation_clip=False)
+
+    # Axes ticks
+    ax.set_xticks(range(n_feat))
+    ax.set_xticklabels(feat_cols, rotation=45, ha="right", fontsize=7)
+    ax.set_yticks(range(n_samp))
+    ax.set_yticklabels(df2["sample"].tolist(), fontsize=6)
+    ax.tick_params(length=0)
+
+    # ── Species colour strip on left ──────────────────────────────────────────
+    strip_x = -2.8
+    for i, sp in enumerate(df2["_species"]):
+        col = _SHIGELLA_SPECIES_PALETTE.get(sp, "#adb5bd")
+        ax.add_patch(mpatches.FancyBboxPatch(
+            (strip_x - 0.45, i - 0.45), 0.9, 0.9,
+            boxstyle="round,pad=0.05", color=col, clip_on=False,
+            transform=ax.transData))
+
+    # Species legend
+    sp_handles = [mpatches.Patch(color=v, label=k)
+                  for k, v in _SHIGELLA_SPECIES_PALETTE.items() if k != "Unknown"]
+    leg = ax.legend(handles=sp_handles, title="Species", fontsize=7, title_fontsize=7.5,
+                    loc="upper left", bbox_to_anchor=(1.01, 1), frameon=False)
+    ax.add_artist(leg)
+
+    # Presence legend
+    pres_handles = [
+        mpatches.Patch(color=dark_red, label="Present"),
+        mpatches.Patch(color=light,    label="Absent", edgecolor="#adb5bd", lw=0.5),
+    ]
+    ax.legend(handles=pres_handles, fontsize=7, loc="upper left",
+              bbox_to_anchor=(1.01, 0.55), frameon=False)
+
+    ax.set_title("Shigella virulence & invasion feature panel", fontsize=10, fontweight="bold")
+    plt.tight_layout()
+    _save(fig, outdir, f"{prefix}_fig10_shigella_features")
+
+
+def fig_shigella_is_elements(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
+    """
+    Fig 11 — Shigella IS element copy-number heatmap.
+
+    Rows = samples sorted by species/serotype.
+    Columns = IS element type.
+    Cell colour encodes copy number (white = 0, dark = high).
+    Literature basis: IS elements account for >50 % of Shigella virulence
+    plasmid ORFs; copy-number variation tracks pathoadaptive evolution
+    (Parkhill et al.; S. flexneri eLife 2015 pangenome figure).
+    """
+    if "is_elements" not in df.columns:
+        return
+
+    df2 = df.copy()
+    df2["_species"]  = _infer_shigella_species(df2)
+    df2["_serotype"] = df2.get("shigeifinder_serotype", pd.Series("NA", index=df2.index)).fillna("NA").astype(str)
+    sp_rank = {s: i for i, s in enumerate(_SHIGELLA_SPECIES_PALETTE)}
+    df2["_sp_rank"] = df2["_species"].map(sp_rank).fillna(99)
+    df2 = df2.sort_values(["_sp_rank", "_serotype", "sample"]).reset_index(drop=True)
+
+    # Parse is_elements: "IS600(3);IS629(1)" → {IS600: 3, IS629: 1}
+    def _parse_is(val) -> dict:
+        counts: dict = {}
+        if pd.isna(val) or str(val).strip() in {"", "NA", "nan", "-"}:
+            return counts
+        for tok in str(val).split(";"):
+            m = re.match(r'([A-Za-z0-9_]+)\((\d+)\)', tok.strip())
+            if m:
+                counts[m.group(1)] = int(m.group(2))
+        return counts
+
+    parsed = df2["is_elements"].apply(_parse_is)
+
+    # Determine column order: screened elements first, then any others found
+    found_elements = set()
+    for d in parsed:
+        found_elements.update(d.keys())
+    elem_order = [e for e in _IS_ELEMENTS if e in found_elements] + \
+                 sorted(found_elements - set(_IS_ELEMENTS))
+    if not elem_order:
+        return
+
+    mat = pd.DataFrame(
+        [{e: d.get(e, 0) for e in elem_order} for d in parsed],
+        columns=elem_order,
+        index=df2.index,
+    )
+
+    n_samp, n_elem = mat.shape
+    fig_w = max(5, n_elem * 0.7 + 3.5)
+    fig_h = max(3, n_samp * 0.22 + 2)
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+
+    vmax = max(mat.values.max(), 1)
+    cmap = LinearSegmentedColormap.from_list("is_cmap", ["#f8f9fa", "#1d3557"])
+    im = ax.imshow(mat.values.astype(float), aspect="auto", cmap=cmap,
+                   vmin=0, vmax=vmax, interpolation="none")
+
+    # Annotate cells with copy number where > 0
+    for row_i in range(n_samp):
+        for col_i in range(n_elem):
+            val = int(mat.iloc[row_i, col_i])
+            if val > 0:
+                text_col = "white" if val > vmax * 0.6 else "#1d3557"
+                ax.text(col_i, row_i, str(val), ha="center", va="center",
+                        fontsize=6.5, color=text_col, fontweight="bold")
+
+    ax.set_xticks(range(n_elem))
+    ax.set_xticklabels(elem_order, rotation=40, ha="right", fontsize=8)
+    ax.set_yticks(range(n_samp))
+    ax.set_yticklabels(df2["sample"].tolist(), fontsize=6)
+    ax.tick_params(length=0)
+
+    # Species colour strip on left
+    strip_x = -0.9
+    for i, sp in enumerate(df2["_species"]):
+        col = _SHIGELLA_SPECIES_PALETTE.get(sp, "#adb5bd")
+        ax.add_patch(mpatches.FancyBboxPatch(
+            (strip_x - 0.35, i - 0.45), 0.7, 0.9,
+            boxstyle="round,pad=0.05", color=col, clip_on=False,
+            transform=ax.transData))
+
+    # Colour bar
+    cbar = fig.colorbar(im, ax=ax, shrink=0.5, pad=0.02)
+    cbar.set_label("Copy number", fontsize=7.5)
+    cbar.ax.tick_params(labelsize=7)
+
+    sp_handles = [mpatches.Patch(color=v, label=k)
+                  for k, v in _SHIGELLA_SPECIES_PALETTE.items() if k != "Unknown"]
+    ax.legend(handles=sp_handles, title="Species", fontsize=7, title_fontsize=7.5,
+              loc="upper left", bbox_to_anchor=(1.12, 1), frameon=False)
+
+    ax.set_title("Shigella IS element landscape", fontsize=10, fontweight="bold")
+    plt.tight_layout()
+    _save(fig, outdir, f"{prefix}_fig11_shigella_is")
 
 
 # ── Save helper ───────────────────────────────────────────────────────────────
@@ -1297,6 +1639,10 @@ def main() -> None:
     fig_virulence(df, outdir, args.prefix)
     fig_amrnet_by_st(df, outdir, args.prefix)
     fig_amrnet_by_group(df, outdir, args.prefix)
+    # Shigella-specific figures (silently skipped for non-Shigella datasets)
+    fig_shigella_serotypes(df, outdir, args.prefix)
+    fig_shigella_features(df, outdir, args.prefix)
+    fig_shigella_is_elements(df, outdir, args.prefix)
     print("Done.", file=sys.stderr)
 
 
