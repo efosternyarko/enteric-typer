@@ -1374,10 +1374,19 @@ def fig_amrnet_by_group(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
         grp_name = "Clermont phylogroup"
         top_n    = 10
     elif "shigeifinder_serotype" in df.columns:
-        row_col  = "shigeifinder_serotype"
         sp       = "Shigella spp."
-        grp_name = "serotype"
         top_n    = 15
+        # If ShigEiFinder produced no usable serotypes, group by inferred species instead
+        _sero = df["shigeifinder_serotype"].fillna("").astype(str).str.strip()
+        _valid = _sero[~_sero.isin({"", "NA", "nan", "None", "-", "Unknown"})]
+        if len(_valid) == 0:
+            df = df.copy()
+            df["_shig_species"] = _infer_shigella_species(df)
+            row_col  = "_shig_species"
+            grp_name = "species"
+        else:
+            row_col  = "shigeifinder_serotype"
+            grp_name = "serotype"
     else:
         return
 
@@ -1410,14 +1419,25 @@ _IS_ELEMENTS = ["IS1", "IS1A", "IS30", "IS186", "IS600", "IS629"]
 
 
 def _infer_shigella_species(df: pd.DataFrame) -> pd.Series:
-    """Return a Series of 'S. sonnei' / 'S. flexneri' / etc. from ShigEiFinder columns."""
+    """Return a Series of 'S. sonnei' / 'S. flexneri' / etc.
+
+    Priority:
+    1. ShigEiFinder cluster/serotype columns (most specific)
+    2. Mykrobe lineage: lineage2* → S. flexneri, lineage3* → S. sonnei
+       (covers the two most common species when ShigEiFinder fails)
+    """
     def _classify(row):
+        # 1. ShigEiFinder columns
         for col in ("shigeifinder_cluster", "shigeifinder_serotype"):
             val = str(row.get(col, "")).lower()
             if "sonnei"      in val: return "S. sonnei"
             if "flexneri"    in val: return "S. flexneri"
             if "dysenteriae" in val or "dysenteri" in val: return "S. dysenteriae"
             if "boydii"      in val: return "S. boydii"
+        # 2. Mykrobe lineage fallback
+        lin = str(row.get("mykrobe_lineage", "")).lower()
+        if lin.startswith("lineage2"): return "S. flexneri"
+        if lin.startswith("lineage3"): return "S. sonnei"
         return "Unknown"
     return df.apply(_classify, axis=1)
 
@@ -1576,7 +1596,7 @@ def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     for xb in boundaries:
         ax.axvline(xb, color="white", lw=2.5)
 
-    # Column group labels above the heatmap
+    # Column group labels above the heatmap (between top spine and title)
     group_info = [
         (0,   1,                       "ShigEiFinder"),
         (2,   2 + len(_PINV_GENES) - 1, "pINV genes"),
@@ -1584,10 +1604,10 @@ def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     ]
     for x0, x1, label in group_info:
         mid = (x0 + x1) / 2
-        ax.annotate(label, xy=(mid, -0.8), xycoords=("data", "axes fraction"),
+        ax.annotate(label, xy=(mid, 1.08), xycoords=("data", "axes fraction"),
                     ha="center", va="bottom", fontsize=7.5, fontweight="bold",
                     annotation_clip=False)
-        ax.annotate("", xy=(x0 - 0.4, -0.6), xytext=(x1 + 0.4, -0.6),
+        ax.annotate("", xy=(x0 - 0.4, 1.04), xytext=(x1 + 0.4, 1.04),
                     xycoords=("data", "axes fraction"),
                     arrowprops=dict(arrowstyle="-", color="#555", lw=1),
                     annotation_clip=False)
@@ -1607,7 +1627,8 @@ def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     ax.legend(handles=pres_handles, fontsize=7, loc="upper left",
               bbox_to_anchor=(1.01, 0.55), frameon=False)
 
-    ax.set_title("Shigella virulence & invasion feature panel", fontsize=10, fontweight="bold")
+    ax.set_title("Shigella virulence & invasion feature panel", fontsize=10,
+                 fontweight="bold", pad=28)
     plt.tight_layout()
     _save(fig, outdir, f"{prefix}_fig9_shigella_features")
 
