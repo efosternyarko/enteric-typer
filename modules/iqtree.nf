@@ -17,8 +17,9 @@ process IQTREE {
     path("iqtree.*"),          emit: all,        optional: true
 
     script:
-    def model       = params.iqtree_model      ?: 'MFP'
-    def bootstraps  = params.iqtree_bootstraps ?: 1000
+    def model       = params.iqtree_model      ?: 'GTR+G'
+    // -B (ultrafast bootstrap) requires >= 1000 replicates; clamp silently
+    def bootstraps  = Math.max((params.iqtree_bootstraps ?: 1000) as int, 1000)
     """
     # Count sequences in alignment
     N_SEQ=\$(grep -c '^>' ${alignment} 2>/dev/null || echo 0)
