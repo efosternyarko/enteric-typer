@@ -165,9 +165,27 @@ workflow {
         other:      true
     }.set { ch_branched }
 
-    ch_branched.other.subscribe { id, fasta, species, dist ->
-        log.warn "SKIPPED '${id}': best match = ${species} (Mash dist = ${String.format('%.4f', dist)}) — not E. coli, Salmonella, or Shigella within threshold"
-    }
+    ch_branched.other
+        .map { id, fasta, species, dist ->
+            "  • ${id}: closest match = ${species} (Mash dist = ${String.format('%.4f', dist)})"
+        }
+        .collect()
+        .subscribe { lines ->
+            if (lines) {
+                log.warn """
+════════════════════════════════════════════════════════════════
+WARNING: ${lines.size()} sample(s) did not pass the species gate
+         and will NOT be typed (no results produced):
+
+${lines.join('\n')}
+
+Reason: Mash distance ≥ 0.05 to all reference genomes.
+If any of these are non-sonnei Shigella (flexneri / boydii /
+dysenteriae), the reference sketch needs rebuilding:
+  bash assets/build_references.sh
+════════════════════════════════════════════════════════════════""".stripIndent()
+            }
+        }
 
     ch_ecoli      = ch_branched.ecoli.map      { id, fasta, sp, d -> tuple(id, fasta) }
     ch_salmonella = ch_branched.salmonella.map { id, fasta, sp, d -> tuple(id, fasta) }

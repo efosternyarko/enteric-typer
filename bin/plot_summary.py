@@ -1116,9 +1116,21 @@ def _amrnet_matrix(
     def _parse(cell) -> set[str]:
         if pd.isna(cell) or str(cell).strip() in ("", "-"):
             return set()
-        raw = {x.strip() for x in str(cell).split(";") if x.strip()}
-        raw -= _EXCLUDE_DC
-        return {_DC_ABBREV.get(r, r) for r in raw}
+        result: set[str] = set()
+        for tok in str(cell).split(";"):
+            tok = tok.strip()
+            if not tok or tok in _EXCLUDE_DC:
+                continue
+            # Whole-token lookup first (e.g. QUINOLONE/TRICLOSAN → QNL)
+            if tok in _DC_ABBREV:
+                result.add(_DC_ABBREV[tok])
+            else:
+                # Expand compound classes (e.g. AMINOGLYCOSIDE/QUINOLONE → AMG + QNL)
+                for part in tok.split("/"):
+                    part = part.strip()
+                    if part and part not in _EXCLUDE_DC:
+                        result.add(_DC_ABBREV.get(part, part))
+        return result
 
     df = df.copy()
     df["_row"] = df[row_col].fillna("Unknown").apply(
