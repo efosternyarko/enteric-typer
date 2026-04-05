@@ -5,16 +5,19 @@
 # used by enteric-typer for species identification.
 #
 # Reference genomes included:
-#   E. coli K-12 MG1655                  GCF_000005845.2
-#   E. coli O157:H7 EDL933               GCF_000006665.1
-#   Salmonella Typhimurium LT2           GCF_000006945.2
-#   Salmonella Typhi CT18                GCF_000195995.1
-#   Salmonella Enteritidis P125109       GCF_000009505.1
-#   Shigella sonnei Ss046                GCF_000006925.2
-#   Shigella flexneri 2a 2457T           GCF_000007405.1
-#   Shigella boydii Sb227                GCF_000012025.1
-#   Shigella dysenteriae Sd197           GCF_000012005.1
-#   Klebsiella pneumoniae HS11286        GCF_000240185.1  (common enteric)
+#   E. coli K-12 MG1655    (phylogroup A)  GCF_000005845.2
+#   E. coli SE11           (phylogroup B1) GCF_000010485.1
+#   E. coli CFT073         (phylogroup B2) GCF_000007445.1
+#   E. coli UMN026         (phylogroup D)  GCF_000026265.1
+#   E. coli O157:H7 EDL933 (phylogroup E)  GCF_000006665.1
+#   Salmonella Typhimurium LT2             GCF_000006945.2
+#   Salmonella Typhi CT18                  GCF_000195995.1
+#   Salmonella Enteritidis P125109         GCF_000009505.1
+#   Shigella sonnei Ss046                  GCF_000006925.2
+#   Shigella flexneri 2a 2457T             GCF_000007405.1
+#   Shigella boydii Sb227                  GCF_000012025.1
+#   Shigella dysenteriae Sd197             GCF_000012005.1
+#   Klebsiella pneumoniae HS11286          GCF_000240185.1  (common enteric)
 #
 # Requirements:
 #   ncbi-datasets-cli  (mamba install -c conda-forge ncbi-datasets-cli)
@@ -100,9 +103,21 @@ download_genome() {
 echo "Downloading reference genomes from NCBI..."
 echo ""
 
-# E. coli references — prefix 'Ecoli_' → species_check maps to 'E_coli'
-download_genome GCF_000005845.2  "Ecoli_K12_MG1655"
-download_genome GCF_000006665.1  "Ecoli_O157H7_EDL933"
+# E. coli references — one representative per major Clermont phylogroup.
+# With full phylogroup coverage any E. coli sample should be ≤ 0.04 Mash
+# distance from its nearest reference, safely under the 0.05 gate threshold.
+# Prefix 'Ecoli_' → species_check maps to 'E_coli'.
+#
+# Phylogroup A  — commensal / lab strains (most common in environmental)
+download_genome GCF_000005845.2  "Ecoli_K12_MG1655"            # phgp A
+# Phylogroup B1 — commensal / ETEC / some STEC
+download_genome GCF_000010485.1  "Ecoli_SE11"                   # phgp B1
+# Phylogroup B2 — dominant ExPEC / UTI / sepsis lineage (ST131, ST73, ST131)
+download_genome GCF_000007445.1  "Ecoli_CFT073"                 # phgp B2
+# Phylogroup D  — ExPEC / diarrhoeagenic (ST69, ST38)
+download_genome GCF_000026265.1  "Ecoli_UMN026"                 # phgp D
+# Phylogroup E  — STEC / EHEC (O157:H7 and relatives)
+download_genome GCF_000006665.1  "Ecoli_O157H7_EDL933"          # phgp E
 
 # Salmonella references — prefix 'Salmonella_' → 'Salmonella_enterica'
 download_genome GCF_000006945.2  "Salmonella_Typhimurium_LT2"
