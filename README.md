@@ -32,11 +32,11 @@ Input assemblies (folder or samplesheet)
         │
         ▼
 ┌────────────────────┐
-│  1. SPECIES CHECK  │  Mash distance against 10-genome reference sketch
-└────────────────────┘
-        │
-   ┌────┼────────┐
-   ▼    ▼        ▼
+│  1. SPECIES CHECK  │  Mash distance against 13-genome reference sketch
+└────────────────────┘  Shigella-priority routing: any Shigella reference
+        │                within Mash distance 0.025 → classified Shigella
+   ┌────┼────────┐       (handles S. sonnei, which is phylogenetically
+   ▼    ▼        ▼        nested within E. coli B2)
 E. coli  Salmonella  Shigella   (other species logged and skipped)
    │         │           │
    ▼         ▼           ▼
@@ -78,20 +78,31 @@ E. coli  Salmonella  Shigella   (other species logged and skipped)
 └──────────────────────────────────────────────────────────────┘
         │
         ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  5. SUMMARY PLOTS                                                    │
-│  Intrinsic resistance genes (classified by AMRrules) are excluded   │
-│  from all AMR figures — only acquired genes are plotted.            │
-│                                                                      │
-│  Fig 1: ST distribution · serotypes · AMR drug classes · MDR        │
-│  Fig 2: Whole-genome SNP tree + ST/phylogroup strips + AMR panel     │
-│  Fig 3: Top acquired AMR genes (intrinsic genes excluded)            │
-│  Fig 4: Plasmid replicon types                                       │
-│  Fig 5: Virulence genes / pathotype (E. coli only)                  │
-│  Fig 6: Pairwise whole-genome SNP distance heatmap                   │
-│  Fig 7: AMR drug class prevalence by sequence type (ST)              │
-│  Fig 8: AMR drug class prevalence by serovar / phylogroup            │
-└──────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│  5. SUMMARY PLOTS                                                        │
+│  Intrinsic resistance genes (classified by AMRrules) are excluded       │
+│  from all AMR figures — only acquired genes are plotted.                │
+│                                                                          │
+│  All species                                                             │
+│  ─────────────────────────────────────────────────────────────────────  │
+│  Fig 1  Population summary (4 panels):                                  │
+│           A — MLST sequence type distribution                            │
+│           B — Serotype bars / IS element landscape (Shigella)           │
+│           C — AMR drug class prevalence                                  │
+│           D — MDR burden per isolate                                     │
+│  Fig 2  Phylogenetic tree + ST/phylogroup strips + AMR heatmap          │
+│  Fig 3  Top acquired AMR genes (intrinsic genes excluded)               │
+│  Fig 4  Plasmid replicon types                                          │
+│  Fig 5  Virulence genes / pathotype                                     │
+│  Fig 6  AMR drug class prevalence by MLST sequence type                 │
+│  Fig 7  AMR drug class prevalence by serovar / Clermont phylogroup      │
+│  (SNP)  Pairwise whole-genome SNP distance heatmap                      │
+│                                                                          │
+│  Shigella only                                                           │
+│  ─────────────────────────────────────────────────────────────────────  │
+│  Fig 8  Species + serotype composition (stacked bars)                   │
+│  Fig 9  Virulence & invasion feature panel (ipaH, pINV genes, IS elems) │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 > **E. coli K-locus typing (Kaptive):** K-locus typing uses two curated databases run sequentially.
@@ -107,9 +118,9 @@ E. coli  Salmonella  Shigella   (other species logged and skipped)
 > [SKA2](https://github.com/bacpop/ska.rust) (split k-mer alignment, k=31),
 > which aligns assemblies without a reference genome and produces a genome-wide SNP
 > alignment and pairwise SNP distance matrix. The alignment is then passed to
-> IQ-TREE 2 for maximum-likelihood tree inference with automatic model
-> selection (default: GTR+G; set `--iqtree_model MFP` to enable ModelFinder Plus). Phylogenetics runs per species when ≥ 3
-> samples are present; skip with `--skip_local_phylo` for faster runs.
+> IQ-TREE 2 for maximum-likelihood tree inference (default: GTR+G; set
+> `--iqtree_model MFP` to enable ModelFinder Plus). Phylogenetics runs per species
+> when ≥ 3 samples are present; skip with `--skip_local_phylo` for faster runs.
 
 ---
 
@@ -261,9 +272,8 @@ mamba install -c bioconda mash
 
 ### Step 6 — Build the Mash reference sketch
 
-This downloads 10 reference genomes from NCBI (2 *E. coli*, 3 *Salmonella*,
-4 *Shigella*, 1 *Klebsiella*) and builds the Mash sketch used for species
-identification. Run once before the first pipeline execution:
+This downloads 13 reference genomes from NCBI and builds the Mash sketch used
+for species identification. Run once before the first pipeline execution:
 
 ```bash
 bash assets/build_references.sh
@@ -271,6 +281,33 @@ bash assets/build_references.sh
 
 Output: `assets/enteric_species_refs.msh`
 Expected runtime: 1–5 minutes depending on bandwidth.
+
+Reference genomes included:
+
+| Species / phylogroup | Strain | Accession |
+|---|---|---|
+| *E. coli* phylogroup A | K-12 MG1655 | GCF_000005845.2 |
+| *E. coli* phylogroup B1 | SE11 | GCF_000010485.1 |
+| *E. coli* phylogroup B2 | CFT073 | GCF_000007445.1 |
+| *E. coli* phylogroup D | UMN026 | GCF_000026265.1 |
+| *E. coli* phylogroup E | O157:H7 EDL933 | GCF_000006665.1 |
+| *S. enterica* Typhimurium | LT2 | GCF_000006945.2 |
+| *S. enterica* Typhi | CT18 | GCF_000195995.1 |
+| *S. enterica* Enteritidis | P125109 | GCF_000009505.1 |
+| *S. sonnei* | ATCC 29930 | GCF_002950395.1 |
+| *S. flexneri* | 2a 2457T | GCF_000007405.1 |
+| *S. boydii* | Sb227 | GCF_000012025.1 |
+| *S. dysenteriae* | Sd197 | GCF_000012005.1 |
+| *K. pneumoniae* | HS11286 | GCF_000240185.1 |
+
+> *Shigella* speciation uses a **priority rule**: if any Shigella reference
+> genome is within Mash distance 0.025, the sample is classified as Shigella
+> regardless of overall best-hit distance. This is necessary because
+> *S. sonnei* is phylogenetically nested within *E. coli* B2 and can score
+> marginally closer to *E. coli* CFT073 than to other Shigella references.
+> The 0.025 threshold safely separates all four *Shigella* species from true
+> *E. coli* (minimum observed Shigella–Shigella-ref distance: 0.018;
+> minimum E. coli–Shigella-ref distance: 0.020).
 
 ---
 
@@ -345,8 +382,8 @@ nextflow run main.nf \
 | `--outdir` | `results` | Output directory |
 | `--skip_local_phylo` | `false` | Skip SKA2 + IQ-TREE (no tree, no SNP matrix/heatmap) |
 | `--ska2_min_samples` | `3` | Minimum samples to attempt SKA2/IQ-TREE |
-| `--iqtree_model` | `GTR+G` | IQ-TREE substitution model (standard for bacterial SNP alignments; use `MFP` for automatic model selection) |
-| `--iqtree_bootstraps` | `1000` | IQ-TREE ultrafast bootstrap replicates |
+| `--iqtree_model` | `GTR+G` | IQ-TREE substitution model (use `MFP` for automatic model selection) |
+| `--iqtree_bootstraps` | `100` | IQ-TREE ultrafast bootstrap replicates |
 
 ---
 
@@ -363,12 +400,12 @@ results/
 │   └── *_species.txt              ← best species + Mash distance per sample
 │
 ├── mlst_ecoli/
-│   └── *_ecoli_achtman_4_mlst.tsv  ← scheme ID in mlst tool database (7-gene Achtman scheme)
+│   └── *_ecoli_achtman_4_mlst.tsv
 ├── amrfinder_ecoli/
 │   └── *_amrfinder.tsv
 ├── ectyper/
 │   └── *_ectyper.tsv
-├── kaptive/
+├── kaptive_g2g3/ kaptive_g1g4/
 │   └── *_ktype.tsv                ← K-locus group, locus, type, confidence
 ├── plasmidfinder_ecoli/
 │   └── *_plasmidfinder.tsv
@@ -397,39 +434,90 @@ results/
 ├── plasmidfinder_shigella/
 │   └── *_plasmidfinder.tsv
 │
-├── ska2_ecoli/
+├── ska2_{species}/
 │   ├── ska2_alignment.fasta       ← whole-genome SNP alignment (input to IQ-TREE)
 │   └── snp_matrix.tsv             ← pairwise whole-genome SNP distance matrix
-├── iqtree_ecoli/
-│   ├── iqtree.treefile             ← Newick ML tree
-│   └── iqtree.iqtree               ← IQ-TREE log + best-fit model
-├── ska2_salmonella/
-│   ├── ska2_alignment.fasta
-│   └── snp_matrix.tsv
-├── iqtree_salmonella/
-│   ├── iqtree.treefile
-│   └── iqtree.iqtree
 │
 ├── ecoli_typer_results.tsv         ← Master results table (E. coli)
 ├── salmonella_typer_results.tsv    ← Master results table (Salmonella)
 ├── shigella_typer_results.tsv      ← Master results table (Shigella)
 │
-│   All tables include AMRFinder columns:
+│   All master tables include:
 │     amrfinder_acquired_genes   — resistance genes (intrinsic excluded)
-│     amrfinder_intrinsic_genes  — wildtype/intrinsic genes (flagged, not excluded)
+│     amrfinder_intrinsic_genes  — wildtype/intrinsic genes (flagged, not plotted)
 │     amrfinder_genes            — all raw AMRFinder hits
 │
-├── {species}_fig1_population_summary.{pdf,png}   ← ST · serotype · AMR drug classes · MDR
-│                                                     ST bars stacked by Clermont phylogroup (E. coli)
-│                                                     Serotype bars stacked by K-locus group (E. coli)
-│                                                     or MLST ST (Salmonella/Shigella); "Other" bins
-│                                                     retain their fill colours (not collapsed to grey)
-├── {species}_fig3_amr_genes.{pdf,png}            ← Acquired AMR gene frequencies
-├── {species}_fig4_plasmid_replicons.{pdf,png}    ← Plasmid replicon types
-├── ecoli_fig5_virulence.{pdf,png}                ← Pathotype / virulence genes (E. coli only)
-├── {species}_tree_amr.{pdf,png}                  ← Phylogeny + phylogroup/ST strip + AMR heatmap
-└── {species}_snp_heatmap.{pdf,png}               ← Pairwise whole-genome SNP distance heatmap
+│ ── Summary figures (PDF + PNG) ──────────────────────────────────────────
+│
+├── {species}_fig1_population_summary.{pdf,png}
+│     Panel A: MLST sequence type distribution
+│               E. coli — bars stacked by Clermont phylogroup
+│               Salmonella — single-hue gradient
+│               Shigella — bars stacked by species (S. sonnei / flexneri / boydii / dysenteriae)
+│     Panel B: Serotype/serovar prevalence (E. coli / Salmonella)
+│               IS element copy-number heatmap (Shigella)
+│     Panel C: AMR drug class prevalence
+│     Panel D: MDR burden per isolate (≥ 3 acquired drug classes = MDR)
+│
+├── {species}_fig2_tree_amr.{pdf,png}
+│     Phylogenetic tree (IQ-TREE ML) with:
+│       — ST colour strip
+│       — Clermont phylogroup strip (E. coli only)
+│       — Virulence gene binary heatmap
+│       — AMR gene heatmap grouped by drug class
+│
+├── {species}_fig3_amr_genes.{pdf,png}      ← Acquired AMR gene frequencies
+├── {species}_fig4_plasmid_replicons.{pdf,png}
+├── {species}_fig5_virulence.{pdf,png}       ← Virulence genes / pathotype
+│
+├── {species}_fig6_amr_by_st.{pdf,png}
+│     AMRnet-style tile heatmap: % isolates carrying each drug class, by MLST ST
+│
+├── {species}_fig7_amr_by_group.{pdf,png}
+│     AMRnet-style tile heatmap: % isolates carrying each drug class, by
+│     serovar (Salmonella) or Clermont phylogroup (E. coli) or serotype (Shigella)
+│
+├── {species}_snp_heatmap.{pdf,png}          ← Pairwise whole-genome SNP distance heatmap
+│
+│ ── Shigella-specific figures ────────────────────────────────────────────
+│
+├── shigella_fig8_shigella_serotypes.{pdf,png}
+│     Species composition + serotype breakdown (stacked bar chart)
+│
+└── shigella_fig9_shigella_features.{pdf,png}
+      Binary heatmap: ipaH · virulence plasmid · pINV invasion genes (icsA/virG,
+      virF, virB, ipaB, ipaC, ipaD) · IS elements per sample
 ```
+
+---
+
+## AMR drug class abbreviations
+
+Figures 6 and 7 use short abbreviations for antimicrobial drug classes.
+Full class names and clinical notes are given below.
+
+| Abbreviation | Drug class | Representative agents |
+|---|---|---|
+| **AMG** | Aminoglycoside | Gentamicin, amikacin, tobramycin, streptomycin |
+| **BLA** | Beta-lactam | Ampicillin, cephalosporins, carbapenems, penicillins |
+| **COL** | Colistin | Colistin (polymyxin E), polymyxin B |
+| **FOS** | Fosfomycin | Fosfomycin |
+| **FOSM** | Fosmidomycin | Fosmidomycin |
+| **LIN** | Lincosamide | Lincomycin, clindamycin |
+| **MAC** | Macrolide | Azithromycin, erythromycin |
+| **NIT** | Nitrofuran | Nitrofurantoin |
+| **PHE** | Phenicol | Chloramphenicol, florfenicol |
+| **QNL** | Quinolone | Ciprofloxacin, nalidixic acid, levofloxacin (all fluoroquinolones) |
+| **SGM** | Streptogramin | Quinupristin–dalfopristin (streptogramin A/B combinations) |
+| **STR** | Streptothricin | Nourseothricin |
+| **SUL** | Sulfonamide | Sulfamethoxazole, sulfisoxazole |
+| **TET** | Tetracycline | Tetracycline, doxycycline, tigecycline |
+| **TMP** | Trimethoprim | Trimethoprim (often combined with sulfonamide as co-trimoxazole) |
+
+> **MDR definition:** an isolate is classified as multidrug-resistant (MDR) when
+> it carries acquired resistance genes in **≥ 3** of the above drug classes.
+> Class EFFLUX is excluded from the MDR count as near-universal efflux pumps
+> are intrinsic to the species and are removed by AMRrules before plotting.
 
 ---
 
@@ -446,6 +534,11 @@ rm -rf work/ .nextflow/ .nextflow.log*
 > **Tip:** keep `work/` if you want to use `-resume` to rerun with different
 > parameters without repeating completed steps. Delete it only when the run is
 > finalised.
+>
+> **Note on `-resume` and tree annotation:** if a previous run failed to produce
+> a tree annotation figure (e.g. due to a software update), Nextflow may cache
+> the failed state. Run once **without `-resume`** to force a clean re-run of
+> the annotation step.
 
 ---
 
@@ -529,17 +622,22 @@ filenames must start with a recognisable prefix:
 | `Klebsiella_` | `Klebsiella` |
 | `Enterobacter_` | `Enterobacter` |
 
+After editing, rebuild the sketch:
+```bash
+bash assets/build_references.sh
+```
+
 ---
 
 ## Vignettes
 
-Example outputs from two real datasets:
+Example outputs from real datasets:
 
 | Dataset | Species | Samples | Vignette |
 |---|---|---|---|
 | NHP gut isolates, The Gambia (Foster-Nyarko et al. 2020) | *Escherichia coli* | 98 | [View vignette](vignettes/ecoli_vignette.md) |
 | Clinical NTS isolates, The Gambia (Darboe et al. 2022) | *Salmonella enterica* | 99 | [View vignette](vignettes/salmonella_vignette.md) |
-| *(Shigella vignette in preparation)* | *Shigella* spp. | — | — |
+| Diverse *Shigella* — all four species (test dataset) | *Shigella* spp. | 15 | *(in preparation)* |
 
 ---
 
