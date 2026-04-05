@@ -17,7 +17,7 @@ process TREE_ANNOTATION {
     val(species_label)
 
     output:
-    path("${species_label}_tree_amr.{pdf,png}"), emit: figures, optional: true
+    path("${species_label}_fig2_tree_amr.{pdf,png}"), emit: figures, optional: true
 
     script:
     """

@@ -6,17 +6,17 @@ Reads either:
   (a) enteric-typer output TSV  --format enteric-typer
   (b) TheiaProk / duplex CSV    --format theiaprok
 
-Produces (PDF + PNG at 300 dpi):
-  {prefix}_fig1_population_summary   — 4-panel: ST · serotype · AMR prevalence · MDR burden
-  {prefix}_fig2_resistome_heatmap    — sample × drug-class binary matrix ordered by ST
+Produces (PDF + PNG):
+  {prefix}_fig1_population_summary   — 4-panel: ST · serotype/IS · AMR prevalence · MDR burden
+  {prefix}_fig2_tree_amr             — phylogenetic tree annotated with virulence & AMR (plot_tree_annotation.py)
   {prefix}_fig3_amr_genes            — top-25 AMR genes/determinants
   {prefix}_fig4_plasmid_replicons    — top-15 plasmid replicons
   {prefix}_fig5_virulence            — virulence gene prevalence
-  {prefix}_fig7_amr_by_st            — AMRnet-style tile heatmap: drug class % by MLST ST
-  {prefix}_fig8_amr_by_group         — AMRnet-style tile heatmap: drug class % by serovar/phylogroup
-  {prefix}_fig9_shigella_serotypes   — Shigella species + serotype composition (stacked bars)
-  {prefix}_fig10_shigella_features   — Shigella virulence & invasion feature panel (binary heatmap)
-  {prefix}_fig11_shigella_is         — Shigella IS element landscape (copy-number heatmap)
+  {prefix}_fig6_amr_by_st            — AMRnet-style tile heatmap: drug class % by MLST ST
+  {prefix}_fig7_amr_by_group         — AMRnet-style tile heatmap: drug class % by serovar/phylogroup
+  Shigella only:
+  {prefix}_fig8_shigella_serotypes   — Shigella species + serotype composition (stacked bars)
+  {prefix}_fig9_shigella_features    — Shigella virulence & invasion feature panel (binary heatmap)
 """
 
 from __future__ import annotations
@@ -1352,7 +1352,7 @@ def fig_amrnet_by_st(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     _draw_amrnet_ax(ax, mat,
                     f"{sp} — AMR drug class prevalence by sequence type (ST)")
     plt.tight_layout()
-    _save(fig, outdir, f"{prefix}_fig7_amr_by_st")
+    _save(fig, outdir, f"{prefix}_fig6_amr_by_st")
 
 
 def fig_amrnet_by_group(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
@@ -1385,7 +1385,7 @@ def fig_amrnet_by_group(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     _draw_amrnet_ax(ax, mat,
                     f"{sp} — AMR drug class prevalence by {grp_name}")
     plt.tight_layout()
-    _save(fig, outdir, f"{prefix}_fig8_amr_by_group")
+    _save(fig, outdir, f"{prefix}_fig7_amr_by_group")
 
 
 # ── Shigella-specific figures ─────────────────────────────────────────────────
@@ -1489,7 +1489,7 @@ def fig_shigella_serotypes(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
               loc="lower right", bbox_to_anchor=(1, 1), ncol=ncol, frameon=False)
 
     plt.tight_layout()
-    _save(fig, outdir, f"{prefix}_fig9_shigella_serotypes")
+    _save(fig, outdir, f"{prefix}_fig8_shigella_serotypes")
 
 
 def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
@@ -1604,7 +1604,7 @@ def fig_shigella_features(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
 
     ax.set_title("Shigella virulence & invasion feature panel", fontsize=10, fontweight="bold")
     plt.tight_layout()
-    _save(fig, outdir, f"{prefix}_fig10_shigella_features")
+    _save(fig, outdir, f"{prefix}_fig9_shigella_features")
 
 
 def fig_shigella_is_elements(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
@@ -1702,7 +1702,8 @@ def fig_shigella_is_elements(df: pd.DataFrame, outdir: Path, prefix: str) -> Non
 def _save(fig: plt.Figure, outdir: Path, stem: str) -> None:
     for ext in ("pdf", "png"):
         p = outdir / f"{stem}.{ext}"
-        fig.savefig(p)
+        dpi = 150 if ext == "png" else None   # PDF is vector; PNG needs explicit DPI for crisp cells
+        fig.savefig(p, dpi=dpi, bbox_inches="tight")
         print(f"  Saved: {p}", file=sys.stderr)
     plt.close(fig)
 
@@ -1738,7 +1739,7 @@ def main() -> None:
     # Shigella-specific figures (silently skipped for non-Shigella datasets)
     fig_shigella_serotypes(df, outdir, args.prefix)
     fig_shigella_features(df, outdir, args.prefix)
-    fig_shigella_is_elements(df, outdir, args.prefix)
+    # fig_shigella_is_elements is now Panel B of fig1 — not a standalone output
     print("Done.", file=sys.stderr)
 
 

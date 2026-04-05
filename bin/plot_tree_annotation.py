@@ -10,7 +10,7 @@ Reads:
   --species   ecoli | salmonella
 
 Produces (PDF + PNG at 300 dpi):
-  {prefix}_tree_amr.pdf / .png
+  {prefix}_fig2_tree_amr.pdf / .png
 
 Layout (left → right):
   Phylogenetic tree  |  ST strip  |  PG strip (E. coli only)  |  Virulence heatmap  |  AMR genes heatmap (grouped by class)
@@ -616,7 +616,7 @@ def plot_tree_amr(
 
     # ── Save ──────────────────────────────────────────────────────────────────
     for ext in ("pdf", "png"):
-        out = outdir / f"{prefix}_tree_amr.{ext}"
+        out = outdir / f"{prefix}_fig2_tree_amr.{ext}"
         fig.savefig(out, dpi=300, bbox_inches="tight")
         print(f"  Saved: {out}", file=sys.stderr)
     plt.close(fig)
