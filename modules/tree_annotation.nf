@@ -5,6 +5,7 @@
 
 process TREE_ANNOTATION {
     label 'low'
+    cache false   // fast plotting step — always re-run to avoid caching silent failures
 
     conda     "${projectDir}/envs/plots.yml"
     container 'quay.io/biocontainers/python:3.11'

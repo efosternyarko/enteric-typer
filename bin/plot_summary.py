@@ -1348,7 +1348,12 @@ def fig_amrnet_by_st(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     nrows, ncols = mat.shape
     fig, ax = plt.subplots(figsize=(max(6, ncols * 0.85 + 3),
                                     max(4, nrows * 0.55 + 2)))
-    sp = ("Salmonella enterica" if "sistr_serovar" in df.columns else "Escherichia coli")
+    if "sistr_serovar" in df.columns:
+        sp = "Salmonella enterica"
+    elif "shigeifinder_serotype" in df.columns:
+        sp = "Shigella spp."
+    else:
+        sp = "Escherichia coli"
     _draw_amrnet_ax(ax, mat,
                     f"{sp} — AMR drug class prevalence by sequence type (ST)")
     plt.tight_layout()
