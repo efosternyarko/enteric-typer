@@ -534,8 +534,8 @@ def plot_tree_amr(
 
             # Scale bracket/label gap with axes height: shorter axes (fewer
             # samples) need more negative offset so labels clear the gene ticks
-            cls_bracket_y = -max(0.15, 2.5 / n)
-            cls_text_y    = cls_bracket_y - 0.05
+            cls_bracket_y = -max(0.28, 4.5 / n)
+            cls_text_y    = cls_bracket_y - 0.09
 
             for cls_name, j0, j1 in cls_spans:
                 x_mid = (j0 + j1) / 2.0
