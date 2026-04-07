@@ -600,7 +600,7 @@ def plot_tree_amr(
             title="Sequence type (ST)",
             title_fontsize=7,
             loc="lower center",
-            bbox_to_anchor=(0.35, -0.04),
+            bbox_to_anchor=(0.5, -0.12),
             frameon=True, framealpha=0.88, edgecolor="none",
             handlelength=1, handleheight=1,
             labelspacing=0.3, columnspacing=1.0,
