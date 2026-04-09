@@ -2,8 +2,9 @@ name: mykrobe
 channels:
   - bioconda
   - conda-forge
+  - nodefaults          # suppress defaults channel even if present in ~/.condarc
 dependencies:
-  - python=3.8         # mykrobe 0.13.0 py38 build; py310 build does not exist on bioconda
+  - python=3.11        # py38 not installable on this system; py311 build available and clean
   - mykrobe=0.13.0
   - setuptools<70
   - c-ares<1.34        # cap c-ares to avoid libnghttp2/libcurl conflict chain via mongodb
