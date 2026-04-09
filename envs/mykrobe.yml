@@ -3,7 +3,7 @@ channels:
   - bioconda
   - conda-forge
 dependencies:
-  - python=3.8         # mykrobe 0.13.0 bioconda build is py38; must match
+  - python=3.10        # mykrobe 0.13.0 has py310 build; biopython resolves cleanly
   - mykrobe=0.13.0
   - setuptools<70
   - c-ares<1.34        # cap c-ares to avoid libnghttp2/libcurl conflict chain via mongodb
