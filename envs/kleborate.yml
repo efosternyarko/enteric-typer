@@ -2,6 +2,6 @@ name: kleborate
 channels:
   - conda-forge
   - bioconda
-  - defaults
+  - nodefaults
 dependencies:
   - bioconda::kleborate>=3.0.0

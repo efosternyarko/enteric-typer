@@ -2,6 +2,6 @@ name: abricate
 channels:
   - conda-forge
   - bioconda
-  - defaults
+  - nodefaults
 dependencies:
   - bioconda::abricate>=1.0.1

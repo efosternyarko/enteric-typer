@@ -2,7 +2,7 @@ name: enteric_kaptive
 channels:
   - bioconda
   - conda-forge
-  - defaults
+  - nodefaults
 dependencies:
   - kaptive=3.2.1
   - biopython

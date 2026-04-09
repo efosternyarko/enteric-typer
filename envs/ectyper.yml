@@ -2,7 +2,7 @@ name: enteric_ectyper
 channels:
   - bioconda
   - conda-forge
-  - defaults
+  - nodefaults
 dependencies:
   - ectyper=1.0.0
   - blast

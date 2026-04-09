@@ -2,7 +2,7 @@ name: enteric_plasmidfinder
 channels:
   - bioconda
   - conda-forge
-  - defaults
+  - nodefaults
 dependencies:
   - plasmidfinder=2.1.6
   - blast

@@ -2,6 +2,6 @@ name: enteric_amrfinder
 channels:
   - bioconda
   - conda-forge
-  - defaults
+  - nodefaults
 dependencies:
-  - ncbi-amrfinderplus=4.2.7
+  - ncbi-amrfinderplus<4.2  # 4.2.7 requires libcurl>=8.18 -> c-ares>=1.34 (broken on some systems)

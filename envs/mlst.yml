@@ -2,7 +2,7 @@ name: enteric_mlst
 channels:
   - bioconda
   - conda-forge
-  - defaults
+  - nodefaults
 dependencies:
   - mlst=2.23.0
   - blast

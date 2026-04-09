@@ -2,7 +2,7 @@ name: ezclermont
 channels:
   - conda-forge
   - bioconda
-  - defaults
+  - nodefaults
 dependencies:
   - python>=3.8
   - pip
