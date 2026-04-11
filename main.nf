@@ -61,6 +61,64 @@ include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_ECOLI      } from './mo
 include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_SALMONELLA } from './modules/plot_assembly_metrics'
 include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_SHIGELLA   } from './modules/plot_assembly_metrics'
 
+// ── Help ──────────────────────────────────────────────────────────────────────
+if (params.help) {
+    log.info """
+    ╔══════════════════════════════════════════════════════════════════════════╗
+    ║                          enteric-typer                                  ║
+    ║   Species-gated genotyping for E. coli, Salmonella & Shigella           ║
+    ╚══════════════════════════════════════════════════════════════════════════╝
+
+    USAGE
+      nextflow run main.nf -profile <profile> [options]
+
+    INPUT (one required)
+      --input_dir   <dir>   Directory of FASTA assemblies (.fasta/.fa/.fna/.fas)
+      --samplesheet <csv>   CSV with columns: id,fasta
+
+    COMMON OPTIONS
+      --outdir            <dir>    Output directory (default: results)
+      --skip_local_phylo           Skip SKA2 + IQ-TREE phylogenetics
+      --iqtree_model      <model>  IQ-TREE substitution model (default: GTR+G)
+      --iqtree_bootstraps <n>      Ultrafast bootstrap replicates (default: 1000)
+      --max_cpus          <n>      Max CPUs per process (default: 16)
+
+    EXAMPLES
+      # Linux / Intel Mac
+      nextflow run main.nf -profile conda \\
+          --input_dir /path/to/assemblies/
+
+      # macOS Apple Silicon (M1/M2/M3/M4)
+      CONDA_SUBDIR=osx-64 nextflow run main.nf -profile conda,arm64 \\
+          --input_dir /path/to/assemblies/
+
+      # HPC (SLURM + Singularity)
+      nextflow run main.nf -profile singularity,slurm \\
+          --input_dir /path/to/assemblies/
+
+      # Skip phylogenetics (faster)
+      nextflow run main.nf -profile conda \\
+          --input_dir /path/to/assemblies/ \\
+          --skip_local_phylo
+
+      # Resume after interruption
+      nextflow run main.nf -profile conda \\
+          --input_dir /path/to/assemblies/ -resume
+
+    PROFILES
+      conda           Local — conda environments
+      mamba           Local — mamba (faster env solving)
+      arm64           Add on Apple Silicon (combine with conda/mamba)
+      docker          Local — Docker
+      singularity     HPC — Singularity/Apptainer
+      slurm           HPC — SLURM executor
+      pbs             HPC — PBS/Torque executor
+
+    Full documentation: README.md
+    """.stripIndent()
+    exit 0
+}
+
 // ── Parameter validation ──────────────────────────────────────────────────────
 if (!params.samplesheet && !params.input_dir) {
     error "ERROR: Provide --samplesheet <csv> or --input_dir <folder>.\nSee README.md for details."
