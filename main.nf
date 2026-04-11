@@ -54,6 +54,12 @@ include { TREE_ANNOTATION   as TREE_ANNOTATION_SHIGELLA   } from './modules/tree
 include { SNP_HEATMAP       as SNP_HEATMAP_ECOLI          } from './modules/snp_heatmap'
 include { SNP_HEATMAP       as SNP_HEATMAP_SALMONELLA      } from './modules/snp_heatmap'
 include { SNP_HEATMAP       as SNP_HEATMAP_SHIGELLA        } from './modules/snp_heatmap'
+include { ASSEMBLY_QC       as ASSEMBLY_QC_ECOLI            } from './modules/assembly_qc'
+include { ASSEMBLY_QC       as ASSEMBLY_QC_SALMONELLA       } from './modules/assembly_qc'
+include { ASSEMBLY_QC       as ASSEMBLY_QC_SHIGELLA         } from './modules/assembly_qc'
+include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_ECOLI      } from './modules/plot_assembly_metrics'
+include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_SALMONELLA } from './modules/plot_assembly_metrics'
+include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_SHIGELLA   } from './modules/plot_assembly_metrics'
 
 // ── Parameter validation ──────────────────────────────────────────────────────
 if (!params.samplesheet && !params.input_dir) {
@@ -190,6 +196,27 @@ dysenteriae), the reference sketch needs rebuilding:
     ch_ecoli      = ch_branched.ecoli.map      { id, fasta, sp, d -> tuple(id, fasta) }
     ch_salmonella = ch_branched.salmonella.map { id, fasta, sp, d -> tuple(id, fasta) }
     ch_shigella   = ch_branched.shigella.map   { id, fasta, sp, d -> tuple(id, fasta) }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PHASE 1b: Assembly QC — per-species metrics figure
+    // 8-panel figure: genome length, N50, contig count, GC% (hist + boxplot each)
+    // ─────────────────────────────────────────────────────────────────────────
+    ASSEMBLY_QC_ECOLI(ch_ecoli)
+    ASSEMBLY_QC_SALMONELLA(ch_salmonella)
+    ASSEMBLY_QC_SHIGELLA(ch_shigella)
+
+    PLOT_ASSEMBLY_METRICS_ECOLI(
+        ASSEMBLY_QC_ECOLI.out.stats.map { id, f -> f }.collect().ifEmpty([]),
+        'ecoli'
+    )
+    PLOT_ASSEMBLY_METRICS_SALMONELLA(
+        ASSEMBLY_QC_SALMONELLA.out.stats.map { id, f -> f }.collect().ifEmpty([]),
+        'salmonella'
+    )
+    PLOT_ASSEMBLY_METRICS_SHIGELLA(
+        ASSEMBLY_QC_SHIGELLA.out.stats.map { id, f -> f }.collect().ifEmpty([]),
+        'shigella'
+    )
 
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 2a: E. coli typing (parallel per sample)
