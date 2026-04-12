@@ -88,7 +88,7 @@ if (params.help) {
       nextflow run main.nf -profile conda \\
           --input_dir /path/to/assemblies/
 
-      # macOS Apple Silicon (M1/M2/M3/M4)
+      # macOS Apple Silicon (M1 and above)
       CONDA_SUBDIR=osx-64 nextflow run main.nf -profile conda,arm64 \\
           --input_dir /path/to/assemblies/
 

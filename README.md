@@ -335,7 +335,7 @@ nextflow run main.nf \
     --outdir    results/ \
     -profile conda
 
-# Apple Silicon Mac (M1/M2/M3/M4) — prefix CONDA_SUBDIR and add arm64 profile
+# Apple Silicon Mac (M1 and above) — prefix CONDA_SUBDIR and add arm64 profile
 CONDA_SUBDIR=osx-64 nextflow run main.nf \
     --input_dir /path/to/assemblies/ \
     --outdir    results/ \
@@ -583,14 +583,14 @@ conda install -c conda-forge graphviz
 |---|---|
 | `conda` | Local workstation with conda |
 | `mamba` | Same as conda but faster env solving |
-| `arm64` | **Add on Apple Silicon (M1/M2/M3/M4)** — forces osx-64 conda envs via Rosetta 2 |
+| `arm64` | **Add on Apple Silicon (M1 and above)** — forces osx-64 conda envs via Rosetta 2 |
 | `docker` | Local with Docker Desktop |
 | `singularity` | HPC cluster with Singularity/Apptainer |
 | `slurm` | SLURM HPC executor (combine with singularity: `-profile singularity,slurm`) |
 | `pbs` | PBS/Torque HPC executor |
 | `test` | Quick test run (no uploads) |
 
-### macOS Apple Silicon (M1/M2/M3/M4)
+### macOS Apple Silicon (M1 and above)
 
 Some Bioconda packages have no native arm64 build. Add the `arm64` profile to force
 Rosetta 2 emulation — tools run at near-native speed and the pipeline produces
@@ -852,7 +852,7 @@ assembly_results/
 > **macOS Apple Silicon note.**
 > Hybracter's internal medaka polishing step requires OpenSSL 1.1.x, which conflicts
 > with the ARM64 conda environment. Pass `--hybracter_no_medaka true` when running
-> on an M1/M2/M3/M4 Mac. This skips medaka and uses the raw Flye assembly instead.
+> on an Apple Silicon Mac (M1 and above). This skips medaka and uses the raw Flye assembly instead.
 > On Linux or Intel Macs, leave `--hybracter_no_medaka false` (the default).
 
 ### Citations (assemble.nf tools)
