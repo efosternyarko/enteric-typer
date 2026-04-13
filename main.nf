@@ -263,17 +263,26 @@ dysenteriae), the reference sketch needs rebuilding:
     ASSEMBLY_QC_SALMONELLA(ch_salmonella)
     ASSEMBLY_QC_SHIGELLA(ch_shigella)
 
+    // Total input count is used as n in the assembly metrics figure title.
+    // This ensures the reported n reflects the full input dataset even when
+    // samples are split across arms (e.g. E. coli samples routed via the
+    // Shigella arm due to Mash-distance proximity).
+    ch_n_total = ch_samples.count()
+
     PLOT_ASSEMBLY_METRICS_ECOLI(
         ASSEMBLY_QC_ECOLI.out.stats.map { id, f -> f }.collect().ifEmpty([]),
-        'ecoli'
+        'ecoli',
+        ch_n_total
     )
     PLOT_ASSEMBLY_METRICS_SALMONELLA(
         ASSEMBLY_QC_SALMONELLA.out.stats.map { id, f -> f }.collect().ifEmpty([]),
-        'salmonella'
+        'salmonella',
+        ch_n_total
     )
     PLOT_ASSEMBLY_METRICS_SHIGELLA(
         ASSEMBLY_QC_SHIGELLA.out.stats.map { id, f -> f }.collect().ifEmpty([]),
-        'shigella'
+        'shigella',
+        ch_n_total
     )
 
     // ─────────────────────────────────────────────────────────────────────────

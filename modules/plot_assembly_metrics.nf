@@ -16,6 +16,7 @@ process PLOT_ASSEMBLY_METRICS {
     input:
     path(stats_files)
     val(species_id)
+    val(n_samples)
 
     output:
     path("${species_id}_assembly_metrics.png"),          emit: plot
@@ -27,6 +28,7 @@ process PLOT_ASSEMBLY_METRICS {
     # Guard: skip if channel produced no files (species absent from this run)
     if [ "${stats_files}" = "[]" ] || [ -z "${stats_files}" ]; then
         touch ${species_id}_assembly_metrics.png
+        touch ${species_id}_assembly_metrics.pdf
         touch ${species_id}_assembly_metrics_summary.tsv
         exit 0
     fi
@@ -35,6 +37,7 @@ process PLOT_ASSEMBLY_METRICS {
         --stats ${stats_files} \\
         --species ${species_id} \\
         --output ${species_id}_assembly_metrics.png \\
-        --summary ${species_id}_assembly_metrics_summary.tsv
+        --summary ${species_id}_assembly_metrics_summary.tsv \\
+        --n_samples ${n_samples}
     """
 }

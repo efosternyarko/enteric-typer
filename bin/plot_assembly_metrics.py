@@ -143,6 +143,9 @@ def main():
                         help='Output PNG file path')
     parser.add_argument('--summary', required=True,
                         help='Output merged summary TSV path')
+    parser.add_argument('--n_samples', type=int, default=0,
+                        help='Override sample count shown in figure title '
+                             '(default: count rows in stats files)')
     args = parser.parse_args()
 
     # ── Load and merge per-sample stats ──────────────────────────────────────
@@ -160,7 +163,7 @@ def main():
     data = pd.concat(frames, ignore_index=True)
     data.to_csv(args.summary, sep='\t', index=False)
 
-    n = len(data)
+    n = args.n_samples if args.n_samples > 0 else len(data)
     species_label = SPECIES_LABELS.get(args.species, args.species)
 
     # ── Extract metric arrays ─────────────────────────────────────────────────
