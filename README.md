@@ -453,18 +453,6 @@ results/
 │     amrfinder_intrinsic_genes  — wildtype/intrinsic genes (flagged, not plotted)
 │     amrfinder_genes            — all raw AMRFinder hits
 │
-│ ── Assembly QC figures (PDF + PNG) ──────────────────────────────────────
-│
-├── {species}_assembly_metrics.{pdf,png}
-│     8-panel assembly QC figure (one per species):
-│       A  Genome length histogram    B  Genome length boxplot
-│       C  Assembly N50 histogram     D  Assembly N50 boxplot
-│       E  Contig count histogram     F  Contig count boxplot
-│       G  GC% histogram              H  GC% boxplot
-├── {species}_assembly_metrics_summary.tsv
-│     Merged per-sample assembly stats (genome_length, num_contigs,
-│     assembly_N50, gc_pct) for all samples of that species.
-│
 │ ── Summary figures (PDF + PNG) ──────────────────────────────────────────
 │
 ├── {species}_fig1_population_summary.{pdf,png}
@@ -502,9 +490,22 @@ results/
 ├── shigella_fig8_shigella_serotypes.{pdf,png}
 │     Species composition + serotype breakdown (stacked bar chart)
 │
-└── shigella_fig9_shigella_features.{pdf,png}
-      Binary heatmap: ipaH · virulence plasmid · pINV invasion genes (icsA/virG,
-      virF, virB, ipaB, ipaC, ipaD) · IS elements per sample
+├── shigella_fig9_shigella_features.{pdf,png}
+│     Binary heatmap: ipaH · virulence plasmid · pINV invasion genes (icsA/virG,
+│     virF, virB, ipaB, ipaC, ipaD) · IS elements per sample
+│
+│ ── Assembly QC figures (PDF + PNG) ──────────────────────────────────────
+│
+├── {species}_assembly_metrics.{pdf,png}
+│     8-panel assembly QC figure (one per species detected):
+│       A  Genome length histogram    B  Genome length boxplot
+│       C  Assembly N50 histogram     D  Assembly N50 boxplot
+│       E  Contig count histogram     F  Contig count boxplot
+│       G  GC% histogram              H  GC% boxplot
+│
+└── {species}_assembly_metrics_summary.tsv
+      Merged per-sample assembly stats (genome_length, num_contigs,
+      assembly_N50, gc_pct) for all samples of that species.
 ```
 
 ---
