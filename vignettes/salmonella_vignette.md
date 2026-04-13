@@ -307,6 +307,20 @@ sorted by overall prevalence. Colour and label encoding are identical to Fig 6.
 
 ---
 
+### Fig 8 — Assembly quality metrics
+
+**Figure 8. Assembly quality metrics for 99 clinical *Salmonella enterica* isolates
+from The Gambia.**
+Four-panel figure summarising per-assembly statistics computed by enteric-typer.
+**(A)** Genome length (bp). **(B)** Number of contigs. **(C)** N50 (bp).
+**(D)** GC content (%). Each panel shows a violin plot overlaid with a box plot
+and individual data points. Dashed reference lines indicate expected values for
+*Salmonella enterica* (genome length ~4.8 Mb; GC% ~52 %).
+
+![Assembly metrics](img/salmonella/salmonella_assembly_metrics.png)
+
+---
+
 ## Reference
 
 Darboe S, Bradbury RS, Phelan J, Kanteh A, Muhammad A-K, Worwui A, Yang S,

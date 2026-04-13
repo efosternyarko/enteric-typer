@@ -248,3 +248,16 @@ inter-species distances reflect the deep divergence between *Shigella* lineages,
 which span approximately 25,000–50,000 SNPs across the core genome.
 
 ![SNP heatmap](img/shigella/shigella_snp_heatmap.png)
+
+---
+
+### Assembly quality metrics
+
+**Assembly quality metrics for 15 *Shigella* spp. reference assemblies.**
+Eight-panel figure summarising per-assembly statistics computed by enteric-typer,
+presented as paired histogram and box plot for each metric.
+**(A–B)** Genome length (bp). **(C–D)** N50 (bp). **(E–F)** Number of contigs.
+**(G–H)** GC content (%). Dashed reference lines indicate expected values for
+*Shigella* spp. (genome length ~4.5 Mb; GC% ~51 %).
+
+![Assembly metrics](img/shigella/shigella_assembly_metrics.png)

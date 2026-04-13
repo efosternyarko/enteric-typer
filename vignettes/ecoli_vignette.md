@@ -216,6 +216,20 @@ sorted by overall prevalence. Colour and label encoding are identical to Fig 7.
 
 ---
 
+### Fig 9 — Assembly quality metrics
+
+**Figure 9. Assembly quality metrics for 98 *Escherichia coli* isolates from
+non-human primates in The Gambia.**
+Eight-panel figure summarising per-assembly statistics computed by enteric-typer,
+presented as paired histogram and box plot for each metric.
+**(A–B)** Genome length (bp). **(C–D)** N50 (bp). **(E–F)** Number of contigs.
+**(G–H)** GC content (%). Dashed reference lines indicate expected values for
+*Escherichia coli* (genome length ~5.0 Mb; GC% ~51 %).
+
+![Assembly metrics](img/ecoli/ecoli_assembly_metrics.png)
+
+---
+
 ## Reference
 
 Foster-Nyarko E, Alikhan N-F, Ravi A, Thilliez G, Thomson NM, Baker D, Kay G,
