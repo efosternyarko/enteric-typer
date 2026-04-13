@@ -85,12 +85,6 @@ E. coli  Salmonella  Shigella   (other species logged and skipped)
 │                                                                          │
 │  All species                                                             │
 │  ─────────────────────────────────────────────────────────────────────  │
-│  Assembly QC  Per-species assembly metrics (8 panels):                  │
-│           A — Genome length histogram   B — Genome length boxplot        │
-│           C — N50 histogram             D — N50 boxplot                  │
-│           E — Contig count histogram    F — Contig count boxplot         │
-│           G — GC% histogram             H — GC% boxplot                  │
-│                                                                          │
 │  Fig 1  Population summary (4 panels):                                  │
 │           A — MLST sequence type distribution                            │
 │           B — Serotype bars / IS element landscape (Shigella)           │
@@ -108,6 +102,14 @@ E. coli  Salmonella  Shigella   (other species logged and skipped)
 │  ─────────────────────────────────────────────────────────────────────  │
 │  Fig 8  Species + serotype composition (stacked bars)                   │
 │  Fig 9  Virulence & invasion feature panel (ipaH, pINV genes, IS elems) │
+│                                                                          │
+│  Assembly QC (all species)                                               │
+│  ─────────────────────────────────────────────────────────────────────  │
+│  Assembly metrics  Per-species 8-panel figure (PDF + PNG):              │
+│           A — Genome length histogram   B — Genome length boxplot        │
+│           C — N50 histogram             D — N50 boxplot                  │
+│           E — Contig count histogram    F — Contig count boxplot         │
+│           G — GC% histogram             H — GC% boxplot                  │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
