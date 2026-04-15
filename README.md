@@ -331,6 +331,41 @@ Reference genomes included:
 
 ---
 
+### Step 7 — Download Kraken2 database (optional)
+
+The contamination screen is **opt-in** and is skipped entirely if `--kraken2_db`
+is not provided. To enable it, download the `k2_standard_08gb` database (~8 GB)
+once and point the pipeline to it at run time:
+
+```bash
+# Create a directory for the database
+mkdir -p ~/kraken2_db
+
+# Download and extract (requires ~8 GB disk space)
+wget -P ~/kraken2_db https://genome-idx.s3.amazonaws.com/kraken/k2_standard_08gb_20240904.tar.gz
+tar -xzf ~/kraken2_db/k2_standard_08gb_20240904.tar.gz -C ~/kraken2_db/
+```
+
+Then pass the database path when running the pipeline:
+
+```bash
+nextflow run main.nf \
+    -profile conda \
+    --input_dir assemblies/ \
+    --outdir    results/ \
+    --kraken2_db ~/kraken2_db/
+```
+
+The database can be reused across projects. Check the
+[Kraken2 index page](https://benlangmead.github.io/aws-indexes/k2) for the
+latest release if a newer build is preferred.
+
+> **Genome size filters** require no setup — thresholds are applied automatically
+> based on species classification. Override defaults with e.g.
+> `--ecoli_min_length 4000000` if needed.
+
+---
+
 ## Quick start
 
 > **Linux / Ubuntu / Debian:** use the Linux commands below.
@@ -404,6 +439,15 @@ nextflow run main.nf \
 | `--ska2_min_samples` | `3` | Minimum samples to attempt SKA2/IQ-TREE |
 | `--iqtree_model` | `GTR+G` | IQ-TREE substitution model (use `MFP` for automatic model selection) |
 | `--iqtree_bootstraps` | `100` | IQ-TREE ultrafast bootstrap replicates |
+| **Assembly QC** | | |
+| `--ecoli_min_length` | `4300000` | E. coli minimum assembly length (bp) |
+| `--ecoli_max_length` | `5900000` | E. coli maximum assembly length (bp) |
+| `--shigella_min_length` | `4300000` | Shigella minimum assembly length (bp) |
+| `--shigella_max_length` | `5900000` | Shigella maximum assembly length (bp) |
+| `--salmonella_min_length` | `4100000` | Salmonella minimum assembly length (bp) |
+| `--salmonella_max_length` | `6600000` | Salmonella maximum assembly length (bp) |
+| `--kraken2_db` | `null` | Path to Kraken2 database directory; contamination screen skipped if not set |
+| `--max_contamination` | `3.0` | Maximum % secondary species allowed (Kraken2) |
 
 ---
 
