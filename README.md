@@ -31,12 +31,24 @@ produces publication-ready summary figures.
 Input assemblies (folder or samplesheet)
         │
         ▼
-┌────────────────────┐
-│  1. SPECIES CHECK  │  Mash distance against 13-genome reference sketch
-└────────────────────┘  Shigella-priority routing: any Shigella reference
-        │                within Mash distance 0.025 → classified Shigella
-   ┌────┼────────┐       (handles S. sonnei, which is phylogenetically
-   ▼    ▼        ▼        nested within E. coli B2)
+┌───────────────────────────────────────────────────────────────────────────┐
+│  1. SPECIES & QC CHECK                                                    │
+│                                                                           │
+│  Species identification — Mash distance against 13-genome reference       │
+│  sketch; Shigella-priority routing: any sample within Mash distance       │
+│  0.025 of a Shigella reference is classified Shigella (handles            │
+│  S. sonnei, which is phylogenetically nested within E. coli B2)           │
+│                                                                           │
+│  Assembly QC filters  (failures logged and excluded from typing)          │
+│  ──────────────────────────────────────────────────────────────────────   │
+│  Genome size    E. coli / Shigella  4.3 – 5.9 Mb                         │
+│                 Salmonella          4.1 – 6.6 Mb                         │
+│  Contamination  Kraken2 secondary species < 3 % of total sequences        │
+│                 (optional — provide --kraken2_db; skipped if not set)     │
+└───────────────────────────────────────────────────────────────────────────┘
+        │
+   ┌────┼────────┐
+   ▼    ▼        ▼
 E. coli  Salmonella  Shigella   (other species logged and skipped)
    │         │           │
    ▼         ▼           ▼
