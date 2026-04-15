@@ -41,8 +41,8 @@ Input assemblies (folder or samplesheet)
 │                                                                           │
 │  Assembly QC filters  (failures logged and excluded from typing)          │
 │  ──────────────────────────────────────────────────────────────────────   │
-│  Genome size    E. coli / Shigella  4.3 – 5.9 Mb                         │
-│                 Salmonella          4.1 – 6.6 Mb                         │
+│  Genome size    E. coli / Shigella  4.3 – 5.9 Mb  [1]                    │
+│                 Salmonella          4.1 – 6.6 Mb  [2]                    │
 │  Contamination  Kraken2 secondary species < 3 % of total sequences        │
 │                 (optional — provide --kraken2_db; skipped if not set)     │
 └───────────────────────────────────────────────────────────────────────────┘
@@ -364,6 +364,10 @@ latest release if a newer build is preferred.
 > **Genome size filters** require no setup — thresholds are applied automatically
 > based on species classification. Override defaults with e.g.
 > `--ecoli_min_length 4000000` if needed.
+>
+> Thresholds are based on published QC criteria:
+> \[1\] E. coli / Shigella — [BIGSdb *E. coli* genome quality criteria](https://bigsdb.pasteur.fr/ecoli/genomes-quality-criteria/)
+> \[2\] Salmonella — [PATH-SAFE consortium recommendations for genomic surveillance of foodborne diseases](https://science.food.gov.uk/article/143833-path-safe-consortium-recommendations-for-genomic-surveillance-of-foodborne-diseases-using-salmonella-as-an-exemplar?attachment_id=300637) (Table 3)
 
 ---
 
