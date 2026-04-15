@@ -1,0 +1,7 @@
+name: enteric_kraken2
+channels:
+  - bioconda
+  - conda-forge
+  - nodefaults
+dependencies:
+  - kraken2>=2.1.2

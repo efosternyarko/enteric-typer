@@ -60,6 +60,7 @@ include { ASSEMBLY_QC       as ASSEMBLY_QC_SHIGELLA         } from './modules/as
 include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_ECOLI      } from './modules/plot_assembly_metrics'
 include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_SALMONELLA } from './modules/plot_assembly_metrics'
 include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_SHIGELLA   } from './modules/plot_assembly_metrics'
+include { KRAKEN2_SCREEN                                            } from './modules/kraken2_screen'
 
 // ── Help ──────────────────────────────────────────────────────────────────────
 if (params.help) {
@@ -286,14 +287,150 @@ dysenteriae), the reference sketch needs rebuilding:
     )
 
     // ─────────────────────────────────────────────────────────────────────────
+    // PHASE 1c: Assembly QC filters
+    //   (i)  Genome size — species-specific acceptable ranges
+    //   (ii) Contamination screen — Kraken2 secondary species < --max_contamination %
+    //        (skipped when --kraken2_db is not provided)
+    // Samples failing either check are logged and excluded from typing.
+    // Assembly stats and metrics plots are generated for all samples regardless.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── (i) Genome size filter ────────────────────────────────────────────────
+    ASSEMBLY_QC_ECOLI.out.stats
+        .map { id, stats_file ->
+            def vals = stats_file.text.trim().split('\n')[1].split('\t')
+            tuple(id, vals[2].toLong())
+        }
+        .join(ch_ecoli)
+        .branch {
+            pass: it[1] >= params.ecoli_min_length && it[1] <= params.ecoli_max_length
+            fail: true
+        }
+        .set { ch_ecoli_size }
+
+    ASSEMBLY_QC_SALMONELLA.out.stats
+        .map { id, stats_file ->
+            def vals = stats_file.text.trim().split('\n')[1].split('\t')
+            tuple(id, vals[2].toLong())
+        }
+        .join(ch_salmonella)
+        .branch {
+            pass: it[1] >= params.salmonella_min_length && it[1] <= params.salmonella_max_length
+            fail: true
+        }
+        .set { ch_salmonella_size }
+
+    ASSEMBLY_QC_SHIGELLA.out.stats
+        .map { id, stats_file ->
+            def vals = stats_file.text.trim().split('\n')[1].split('\t')
+            tuple(id, vals[2].toLong())
+        }
+        .join(ch_shigella)
+        .branch {
+            pass: it[1] >= params.shigella_min_length && it[1] <= params.shigella_max_length
+            fail: true
+        }
+        .set { ch_shigella_size }
+
+    ch_ecoli_size.fail
+        .map { id, len, fasta ->
+            "  • ${id}: ${len} bp (E. coli expected ${params.ecoli_min_length}–${params.ecoli_max_length} bp)"
+        }
+        .mix(ch_salmonella_size.fail.map { id, len, fasta ->
+            "  • ${id}: ${len} bp (Salmonella expected ${params.salmonella_min_length}–${params.salmonella_max_length} bp)"
+        })
+        .mix(ch_shigella_size.fail.map { id, len, fasta ->
+            "  • ${id}: ${len} bp (Shigella expected ${params.shigella_min_length}–${params.shigella_max_length} bp)"
+        })
+        .collect()
+        .subscribe { lines ->
+            if (lines) {
+                log.warn """
+════════════════════════════════════════════════════════════════
+WARNING: ${lines.size()} sample(s) failed genome size QC and will NOT be typed:
+
+${lines.join('\n')}
+
+Override thresholds with e.g. --ecoli_min_length 4000000
+════════════════════════════════════════════════════════════════""".stripIndent()
+            }
+        }
+
+    ch_ecoli_pass      = ch_ecoli_size.pass.map     { id, len, fasta -> tuple(id, fasta) }
+    ch_salmonella_pass = ch_salmonella_size.pass.map { id, len, fasta -> tuple(id, fasta) }
+    ch_shigella_pass   = ch_shigella_size.pass.map   { id, len, fasta -> tuple(id, fasta) }
+
+    // ── (ii) Contamination screening (optional — skipped if --kraken2_db not set) ──
+    ch_ecoli_typed      = ch_ecoli_pass
+    ch_salmonella_typed = ch_salmonella_pass
+    ch_shigella_typed   = ch_shigella_pass
+
+    if (params.kraken2_db) {
+        ch_kraken2_db = Channel.value(file(params.kraken2_db, checkIfExists: true))
+
+        KRAKEN2_SCREEN(
+            ch_ecoli_pass.mix(ch_salmonella_pass).mix(ch_shigella_pass),
+            ch_kraken2_db
+        )
+
+        // Collect IDs of samples that pass contamination screen into a set
+        ch_kraken_pass_ids = KRAKEN2_SCREEN.out.qc
+            .filter { id, qc_file ->
+                qc_file.text.trim().split('\n')[1].split('\t')[4] == 'PASS'
+            }
+            .map { id, _ -> id }
+            .collect()
+            .map  { ids -> ids as Set }
+
+        ch_ecoli_typed = ch_ecoli_pass
+            .combine(ch_kraken_pass_ids)
+            .filter { id, fasta, pass_set -> id in pass_set }
+            .map    { id, fasta, _        -> tuple(id, fasta) }
+
+        ch_salmonella_typed = ch_salmonella_pass
+            .combine(ch_kraken_pass_ids)
+            .filter { id, fasta, pass_set -> id in pass_set }
+            .map    { id, fasta, _        -> tuple(id, fasta) }
+
+        ch_shigella_typed = ch_shigella_pass
+            .combine(ch_kraken_pass_ids)
+            .filter { id, fasta, pass_set -> id in pass_set }
+            .map    { id, fasta, _        -> tuple(id, fasta) }
+
+        // Log contamination failures
+        KRAKEN2_SCREEN.out.qc
+            .filter { id, qc_file ->
+                qc_file.text.trim().split('\n')[1].split('\t')[4] == 'FAIL'
+            }
+            .map { id, qc_file ->
+                def fields = qc_file.text.trim().split('\n')[1].split('\t')
+                "  • ${id}: secondary species ${fields[3]}% of total sequences " +
+                "(threshold: ${params.max_contamination}%)"
+            }
+            .collect()
+            .subscribe { lines ->
+                if (lines) {
+                    log.warn """
+════════════════════════════════════════════════════════════════
+WARNING: ${lines.size()} sample(s) failed contamination QC and will NOT be typed:
+
+${lines.join('\n')}
+
+Adjust threshold with --max_contamination (current: ${params.max_contamination}%)
+════════════════════════════════════════════════════════════════""".stripIndent()
+                }
+            }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // PHASE 2a: E. coli typing (parallel per sample)
     // ─────────────────────────────────────────────────────────────────────────
-    MLST_ECOLI(ch_ecoli,          'ecoli_achtman_4')
-    AMRFINDER_ECOLI(ch_ecoli,     'Escherichia')
-    ECTYPER(ch_ecoli)
-    KLEBORATE(ch_ecoli)
-    EZCLERMONT(ch_ecoli)
-    PLASMIDFINDER_ECOLI(ch_ecoli, 'enterobacteriaceae')
+    MLST_ECOLI(ch_ecoli_typed,          'ecoli_achtman_4')
+    AMRFINDER_ECOLI(ch_ecoli_typed,     'Escherichia')
+    ECTYPER(ch_ecoli_typed)
+    KLEBORATE(ch_ecoli_typed)
+    EZCLERMONT(ch_ecoli_typed)
+    PLASMIDFINDER_ECOLI(ch_ecoli_typed, 'enterobacteriaceae')
 
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 2c: E. coli K-locus typing
@@ -305,7 +442,7 @@ dysenteriae), the reference sketch needs rebuilding:
     ch_normalise_script = file("${projectDir}/bin/normalise_kaptive_scores.py",
                               checkIfExists: true)
 
-    KAPTIVE_G2G3(ch_ecoli, ch_g2g3_db)
+    KAPTIVE_G2G3(ch_ecoli_typed, ch_g2g3_db)
 
     KAPTIVE_G2G3.out.results
         .branch {
@@ -336,10 +473,10 @@ dysenteriae), the reference sketch needs rebuilding:
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 2b: Salmonella typing (parallel per sample)
     // ─────────────────────────────────────────────────────────────────────────
-    MLST_SALMONELLA(ch_salmonella,          'senterica_achtman_2')
-    AMRFINDER_SALMONELLA(ch_salmonella,     'Salmonella')
-    SISTR(ch_salmonella)
-    PLASMIDFINDER_SALMONELLA(ch_salmonella, 'enterobacteriaceae')
+    MLST_SALMONELLA(ch_salmonella_typed,          'senterica_achtman_2')
+    AMRFINDER_SALMONELLA(ch_salmonella_typed,     'Salmonella')
+    SISTR(ch_salmonella_typed)
+    PLASMIDFINDER_SALMONELLA(ch_salmonella_typed, 'enterobacteriaceae')
 
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 2d: Shigella typing (parallel per sample)
@@ -351,14 +488,14 @@ dysenteriae), the reference sketch needs rebuilding:
     ch_parse_mykrobe_script = file("${projectDir}/bin/parse_mykrobe.py",
                                checkIfExists: true)
 
-    MLST_SHIGELLA(ch_shigella,             'ecoli_achtman_4')
-    AMRFINDER_SHIGELLA(ch_shigella,        'Escherichia')
-    SHIGEIFINDER(ch_shigella)
-    PLASMIDFINDER_SHIGELLA(ch_shigella,    'enterobacteriaceae')
-    MYKROBE(ch_shigella)
+    MLST_SHIGELLA(ch_shigella_typed,             'ecoli_achtman_4')
+    AMRFINDER_SHIGELLA(ch_shigella_typed,        'Escherichia')
+    SHIGEIFINDER(ch_shigella_typed)
+    PLASMIDFINDER_SHIGELLA(ch_shigella_typed,    'enterobacteriaceae')
+    MYKROBE(ch_shigella_typed)
     PARSE_MYKROBE(MYKROBE.out, ch_parse_mykrobe_script)
-    PINV_SCREEN(ch_shigella, ch_pinv_db)
-    IS_SCREEN(ch_shigella, ch_is_db)
+    PINV_SCREEN(ch_shigella_typed, ch_pinv_db)
+    IS_SCREEN(ch_shigella_typed, ch_is_db)
 
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 3: Core-SNP phylogenetics (SKA2 + IQ-TREE) per species
@@ -372,9 +509,9 @@ dysenteriae), the reference sketch needs rebuilding:
     ch_shigella_snp_matrix   = Channel.value(file('NO_FILE'))
 
     if (!params.skip_local_phylo) {
-        ch_ecoli_fastas      = ch_ecoli.map      { id, fasta -> fasta }.collect().filter { it.size() > 0 }
-        ch_salmonella_fastas = ch_salmonella.map { id, fasta -> fasta }.collect().filter { it.size() > 0 }
-        ch_shigella_fastas   = ch_shigella.map   { id, fasta -> fasta }.collect().filter { it.size() > 0 }
+        ch_ecoli_fastas      = ch_ecoli_typed.map      { id, fasta -> fasta }.collect().filter { it.size() > 0 }
+        ch_salmonella_fastas = ch_salmonella_typed.map { id, fasta -> fasta }.collect().filter { it.size() > 0 }
+        ch_shigella_fastas   = ch_shigella_typed.map   { id, fasta -> fasta }.collect().filter { it.size() > 0 }
 
         SKA2_ECOLI(ch_ecoli_fastas)
         SKA2_SALMONELLA(ch_salmonella_fastas)
