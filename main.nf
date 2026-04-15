@@ -61,6 +61,8 @@ include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_ECOLI      } from './mo
 include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_SALMONELLA } from './modules/plot_assembly_metrics'
 include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_SHIGELLA   } from './modules/plot_assembly_metrics'
 include { KRAKEN2_SCREEN                                            } from './modules/kraken2_screen'
+include { AGGREGATE_KRAKEN2                                         } from './modules/aggregate_kraken2'
+include { AGGREGATE_ASSEMBLY_QC                                     } from './modules/aggregate_assembly_qc'
 
 // ── Help ──────────────────────────────────────────────────────────────────────
 if (params.help) {
@@ -360,42 +362,82 @@ Override thresholds with e.g. --ecoli_min_length 4000000
     ch_salmonella_pass = ch_salmonella_size.pass.map { id, len, fasta -> tuple(id, fasta) }
     ch_shigella_pass   = ch_shigella_size.pass.map   { id, len, fasta -> tuple(id, fasta) }
 
+    // ── Assembly size QC summary table (all samples, FAILs first) ────────────
+    ch_assembly_size_stats = ASSEMBLY_QC_ECOLI.out.stats
+        .map { id, f -> tuple(id, 'E. coli', f) }
+        .mix(ASSEMBLY_QC_SALMONELLA.out.stats.map { id, f -> tuple(id, 'Salmonella enterica', f) })
+        .mix(ASSEMBLY_QC_SHIGELLA.out.stats.map   { id, f -> tuple(id, 'Shigella', f) })
+
+    ch_species_map = ch_assembly_size_stats
+        .map { id, species, _ -> "${id}\t${species}\n" }
+        .collectFile(name: 'species_map.tsv')
+
+    AGGREGATE_ASSEMBLY_QC(
+        ch_assembly_size_stats.map { id, species, f -> f }.collect(),
+        ch_species_map,
+        params.ecoli_min_length,
+        params.ecoli_max_length,
+        params.salmonella_min_length,
+        params.salmonella_max_length,
+        params.shigella_min_length,
+        params.shigella_max_length
+    )
+
     // ── (ii) Contamination screening (optional — skipped if --kraken2_db not set) ──
     ch_ecoli_typed      = ch_ecoli_pass
     ch_salmonella_typed = ch_salmonella_pass
     ch_shigella_typed   = ch_shigella_pass
 
     if (params.kraken2_db) {
-        ch_kraken2_db = Channel.value(file(params.kraken2_db, checkIfExists: true))
+        def kraken2_db_path = file(params.kraken2_db)
+        if (!kraken2_db_path.exists()) {
+            error """\
+                ── Kraken2 database not found ───────────────────────────────────────
+                Path given: ${params.kraken2_db}
+
+                The directory does not exist. Download the recommended database (~8 GB):
+
+                  mkdir -p ${params.kraken2_db}
+                  cd ${params.kraken2_db}
+                  curl -L -O https://genome-idx.s3.amazonaws.com/kraken/k2_standard_08gb_20240904.tar.gz
+                  tar -xzf k2_standard_08gb_20240904.tar.gz
+
+                Then re-run with --kraken2_db ${params.kraken2_db}
+                Or omit --kraken2_db entirely to skip contamination screening.
+                ─────────────────────────────────────────────────────────────────────
+                """.stripIndent()
+        }
+        ch_kraken2_db = Channel.value(kraken2_db_path)
 
         KRAKEN2_SCREEN(
             ch_ecoli_pass.mix(ch_salmonella_pass).mix(ch_shigella_pass),
             ch_kraken2_db
         )
 
-        // Collect IDs of samples that pass contamination screen into a set
-        ch_kraken_pass_ids = KRAKEN2_SCREEN.out.qc
-            .filter { id, qc_file ->
-                qc_file.text.trim().split('\n')[1].split('\t')[4] == 'PASS'
-            }
-            .map { id, _ -> id }
-            .collect()
-            .map  { ids -> ids as Set }
-
+        // Join each species channel with Kraken2 QC output (remainder: true so
+        // samples whose KRAKEN2_SCREEN process was ignored still pass through).
+        // A sample passes if: (a) it has no Kraken2 result (process failed/ignored)
+        //                  or (b) its status column == 'PASS'
         ch_ecoli_typed = ch_ecoli_pass
-            .combine(ch_kraken_pass_ids)
-            .filter { id, fasta, pass_set -> id in pass_set }
-            .map    { id, fasta, _        -> tuple(id, fasta) }
+            .join(KRAKEN2_SCREEN.out.qc, remainder: true)
+            .filter { id, fasta, qc_file ->
+                fasta != null && (qc_file == null || qc_file.text.trim().split('\n')[1].split('\t')[4] == 'PASS')
+            }
+            .map { id, fasta, _ -> tuple(id, fasta) }
 
         ch_salmonella_typed = ch_salmonella_pass
-            .combine(ch_kraken_pass_ids)
-            .filter { id, fasta, pass_set -> id in pass_set }
-            .map    { id, fasta, _        -> tuple(id, fasta) }
+            .join(KRAKEN2_SCREEN.out.qc, remainder: true)
+            .filter { id, fasta, qc_file ->
+                fasta != null && (qc_file == null || qc_file.text.trim().split('\n')[1].split('\t')[4] == 'PASS')
+            }
+            .map { id, fasta, _ -> tuple(id, fasta) }
 
         ch_shigella_typed = ch_shigella_pass
-            .combine(ch_kraken_pass_ids)
-            .filter { id, fasta, pass_set -> id in pass_set }
-            .map    { id, fasta, _        -> tuple(id, fasta) }
+            .join(KRAKEN2_SCREEN.out.qc, remainder: true)
+            .filter { id, fasta, qc_file ->
+                fasta != null && (qc_file == null || qc_file.text.trim().split('\n')[1].split('\t')[4] == 'PASS')
+            }
+            .map { id, fasta, _ -> tuple(id, fasta) }
 
         // Log contamination failures
         KRAKEN2_SCREEN.out.qc
@@ -420,6 +462,11 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
 ════════════════════════════════════════════════════════════════""".stripIndent()
                 }
             }
+
+        // Aggregate all per-sample Kraken2 QC into one summary table
+        AGGREGATE_KRAKEN2(
+            KRAKEN2_SCREEN.out.qc.map { id, qc_file -> qc_file }.collect()
+        )
     }
 
     // ─────────────────────────────────────────────────────────────────────────

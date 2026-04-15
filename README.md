@@ -342,8 +342,9 @@ once and point the pipeline to it at run time:
 mkdir -p ~/kraken2_db
 
 # Download and extract (requires ~8 GB disk space)
-wget -P ~/kraken2_db https://genome-idx.s3.amazonaws.com/kraken/k2_standard_08gb_20240904.tar.gz
-tar -xzf ~/kraken2_db/k2_standard_08gb_20240904.tar.gz -C ~/kraken2_db/
+cd ~/kraken2_db
+curl -L -O https://genome-idx.s3.amazonaws.com/kraken/k2_standard_08gb_20240904.tar.gz
+tar -xzf k2_standard_08gb_20240904.tar.gz
 ```
 
 Then pass the database path when running the pipeline:
