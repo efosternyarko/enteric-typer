@@ -34,7 +34,7 @@ rows.sort(key=lambda r: (r[0], r[1], r[2]))  # sample, replicon, contig
 
 with open('plasmid_amr_map.tsv', 'w') as out:
     out.write('sample_id\\treplicon\\tcontig\\tamr_genes\\tdrug_classes\\t'
-              'identity\\tcoverage\\n')
+              'identity\\tcoverage\\tlikely_location\\n')
     for r in rows:
         out.write('\\t'.join(r) + '\\n')
 EOF

@@ -937,7 +937,45 @@ def fig_amr_genes(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int = 25) 
 
 # ── Figure 4: Plasmid replicons ───────────────────────────────────────────────
 
-def fig_plasmid_replicons(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int = 15) -> None:
+# Drug class priority order for bar colour assignment (most important first).
+# The first class present for a given replicon determines its bar colour.
+_CLASS_PRIORITY = [
+    "BETA-LACTAM", "QUINOLONE", "COLISTIN", "AMINOGLYCOSIDE",
+    "TETRACYCLINE", "MACROLIDE", "PHENICOL", "SULFONAMIDE",
+    "TRIMETHOPRIM", "FOSFOMYCIN", "STREPTOTHRICIN", "NITROFURAN",
+]
+_CLASS_BAR_COLOR = {
+    "BETA-LACTAM":     "#d62728",
+    "QUINOLONE":       "#ff7f0e",
+    "COLISTIN":        "#7f7f7f",
+    "AMINOGLYCOSIDE":  "#1f77b4",
+    "TETRACYCLINE":    "#9467bd",
+    "MACROLIDE":       "#e377c2",
+    "PHENICOL":        "#8c564b",
+    "SULFONAMIDE":     "#2ca02c",
+    "TRIMETHOPRIM":    "#bcbd22",
+    "FOSFOMYCIN":      "#17becf",
+    "STREPTOTHRICIN":  "#aec7e8",
+    "NITROFURAN":      "#ffbb78",
+    "No AMR":          "#d3d3d3",
+}
+
+
+def _dominant_class(classes_set: set) -> str:
+    """Return the highest-priority drug class from a set, or 'No AMR'."""
+    for cls in _CLASS_PRIORITY:
+        if cls in classes_set:
+            return cls
+    return "No AMR"
+
+
+def fig_plasmid_replicons(
+    df: pd.DataFrame,
+    outdir: Path,
+    prefix: str,
+    top_n: int = 15,
+    plasmid_map_path: str | None = None,
+) -> None:
     col = next((c for c in ["replicons", "plasmidfinder_plasmids"] if c in df.columns), None)
     if col is None:
         print("WARNING: no plasmid column — skipping replicon plot", file=sys.stderr)
@@ -964,13 +1002,36 @@ def fig_plasmid_replicons(df: pd.DataFrame, outdir: Path, prefix: str, top_n: in
     labels = [r for r, _ in top]
     pcts   = [100 * v / len(df) for _, v in top]
 
-    def _rcol(r: str) -> str:
+    # Build replicon → set of drug classes from plasmid_amr_map.tsv if available
+    rep_classes: dict[str, set] = {}
+    if plasmid_map_path and Path(plasmid_map_path).is_file():
+        try:
+            pm = pd.read_csv(plasmid_map_path, sep="\t", low_memory=False)
+            for _, row in pm.iterrows():
+                rep = str(row.get("replicon", "")).strip()
+                dc  = str(row.get("drug_classes", "")).strip()
+                if rep and rep not in _SENTINEL:
+                    if rep not in rep_classes:
+                        rep_classes[rep] = set()
+                    if dc and dc not in _SENTINEL:
+                        for c in dc.split(";"):
+                            c = c.strip()
+                            if c:
+                                rep_classes[rep].add(c)
+        except Exception as e:
+            print(f"WARNING: could not load plasmid_amr_map — {e}", file=sys.stderr)
+
+    def _bar_color(r: str) -> str:
+        if rep_classes:
+            cls = _dominant_class(rep_classes.get(r, set()))
+            return _CLASS_BAR_COLOR.get(cls, _CLASS_BAR_COLOR["No AMR"])
+        # Fallback: colour by Inc family (original behaviour)
         if r.startswith("IncF"):  return "#f28e2b"
         if r.startswith("Col"):   return "#bab0ac"
         if r.startswith("Inc"):   return "#4e79a7"
         return "#76b7b2"
 
-    colors = [_rcol(l) for l in labels]
+    colors = [_bar_color(l) for l in labels]
 
     fig, ax = plt.subplots(figsize=(6.5, top_n * 0.34 + 1.4))
     y = np.arange(len(labels))
@@ -979,14 +1040,30 @@ def fig_plasmid_replicons(df: pd.DataFrame, outdir: Path, prefix: str, top_n: in
     ax.set_yticklabels(labels, fontsize=8)
     ax.invert_yaxis()
     ax.set_xlabel("Prevalence (% of isolates)")
-    ax.set_title("Plasmid replicon types (PlasmidFinder)", fontweight="bold")
     ax.set_xlim(0, 108)
     ax.xaxis.set_major_locator(plt.MultipleLocator(20))
-    ax.legend(handles=[
-        mpatches.Patch(color="#f28e2b", label="IncF family"),
-        mpatches.Patch(color="#4e79a7", label="Other Inc"),
-        mpatches.Patch(color="#bab0ac", label="Col plasmid"),
-    ], fontsize=7.5)
+
+    if rep_classes:
+        ax.set_title("Plasmid replicon types — coloured by dominant AMR drug class\n"
+                     "(PlasmidFinder + AMRFinder)", fontweight="bold")
+        # Show legend for classes actually present in top-N
+        seen_classes = {_dominant_class(rep_classes.get(l, set())) for l in labels}
+        legend_order = [c for c in _CLASS_PRIORITY if c in seen_classes] + (
+            ["No AMR"] if "No AMR" in seen_classes else [])
+        leg_handles = [
+            mpatches.Patch(color=_CLASS_BAR_COLOR[c],
+                           label=CLASS_LABEL.get(c, c.title()) if c != "No AMR" else "No AMR")
+            for c in legend_order
+        ]
+        ax.legend(handles=leg_handles, fontsize=7.5, title="Dominant AMR class",
+                  title_fontsize=7.5)
+    else:
+        ax.set_title("Plasmid replicon types (PlasmidFinder)", fontweight="bold")
+        ax.legend(handles=[
+            mpatches.Patch(color="#f28e2b", label="IncF family"),
+            mpatches.Patch(color="#4e79a7", label="Other Inc"),
+            mpatches.Patch(color="#bab0ac", label="Col plasmid"),
+        ], fontsize=7.5)
 
     _save(fig, outdir, f"{prefix}_fig4_plasmid_replicons")
 
@@ -1758,11 +1835,14 @@ def _save(fig: plt.Figure, outdir: Path, stem: str) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="enteric-typer summary plots")
-    p.add_argument("--input",   "-i", required=True)
-    p.add_argument("--format",  "-f", default="auto",
+    p.add_argument("--input",       "-i", required=True)
+    p.add_argument("--format",      "-f", default="auto",
                    choices=["auto", "enteric-typer", "theiaprok"])
-    p.add_argument("--outdir",  "-o", default=".")
-    p.add_argument("--prefix",  "-p", default="enteric_typer")
+    p.add_argument("--outdir",      "-o", default=".")
+    p.add_argument("--prefix",      "-p", default="enteric_typer")
+    p.add_argument("--plasmid_map", "-m", default=None,
+                   help="Path to aggregate plasmid_amr_map.tsv; used to colour "
+                        "fig4 replicon bars by dominant drug class.")
     args = p.parse_args()
 
     outdir = Path(args.outdir)
@@ -1778,7 +1858,7 @@ def main() -> None:
     fig_population_summary(df, outdir, args.prefix)
     # Fig 2 (tree-annotated resistome heatmap) is generated by plot_tree_annotation.py
     fig_amr_genes(df, outdir, args.prefix)
-    fig_plasmid_replicons(df, outdir, args.prefix)
+    fig_plasmid_replicons(df, outdir, args.prefix, plasmid_map_path=args.plasmid_map)
     fig_virulence(df, outdir, args.prefix)
     fig_amrnet_by_st(df, outdir, args.prefix)
     fig_amrnet_by_group(df, outdir, args.prefix)

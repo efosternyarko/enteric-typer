@@ -65,6 +65,7 @@ include { AGGREGATE_KRAKEN2                                         } from './mo
 include { AGGREGATE_ASSEMBLY_QC                                     } from './modules/aggregate_assembly_qc'
 include { PLASMID_AMR_MAP                                           } from './modules/plasmid_amr_map'
 include { AGGREGATE_PLASMID_AMR_MAP                                 } from './modules/aggregate_plasmid_amr_map'
+include { PLOT_PLASMID_OVERVIEW                                     } from './modules/plot_plasmid_overview'
 include { AMRFINDER_UPDATE                                          } from './modules/amrfinder_update'
 
 // ── Help ──────────────────────────────────────────────────────────────────────
@@ -652,12 +653,35 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
         PLASMID_AMR_MAP.out.map.map { id, f -> f }.collect()
     )
 
+    PLOT_PLASMID_OVERVIEW(
+        ch_ecoli_tree,
+        AGGREGATE_ECOLI.out.results,
+        AGGREGATE_PLASMID_AMR_MAP.out.summary,
+        'ecoli'
+    )
+
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 5: Summary plots (always runs — no API keys required)
     // ─────────────────────────────────────────────────────────────────────────
-    PLOT_SUMMARY_ECOLI(AGGREGATE_ECOLI.out.results,         'ecoli')
-    PLOT_SUMMARY_SALMONELLA(AGGREGATE_SALMONELLA.out.results, 'salmonella')
-    PLOT_SUMMARY_SHIGELLA(AGGREGATE_SHIGELLA.out.results,   'shigella')
+    // Pass the aggregate plasmid_amr_map to PLOT_SUMMARY_ECOLI so fig4 is
+    // coloured by dominant drug class.  Salmonella/Shigella get NO_FILE
+    // (plasmid–AMR map mixes all species in one TSV; drug-class colouring
+    //  is most meaningful for E. coli where replicons are well-characterised).
+    PLOT_SUMMARY_ECOLI(
+        AGGREGATE_ECOLI.out.results,
+        'ecoli',
+        AGGREGATE_PLASMID_AMR_MAP.out.summary
+    )
+    PLOT_SUMMARY_SALMONELLA(
+        AGGREGATE_SALMONELLA.out.results,
+        'salmonella',
+        file("NO_FILE")
+    )
+    PLOT_SUMMARY_SHIGELLA(
+        AGGREGATE_SHIGELLA.out.results,
+        'shigella',
+        file("NO_FILE")
+    )
 
     TREE_ANNOTATION_ECOLI(
         ch_ecoli_tree,
