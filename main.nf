@@ -63,6 +63,8 @@ include { PLOT_ASSEMBLY_METRICS as PLOT_ASSEMBLY_METRICS_SHIGELLA   } from './mo
 include { KRAKEN2_SCREEN                                            } from './modules/kraken2_screen'
 include { AGGREGATE_KRAKEN2                                         } from './modules/aggregate_kraken2'
 include { AGGREGATE_ASSEMBLY_QC                                     } from './modules/aggregate_assembly_qc'
+include { PLASMID_AMR_MAP                                           } from './modules/plasmid_amr_map'
+include { AGGREGATE_PLASMID_AMR_MAP                                 } from './modules/aggregate_plasmid_amr_map'
 
 // ── Help ──────────────────────────────────────────────────────────────────────
 if (params.help) {
@@ -623,6 +625,22 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
         PARSE_MYKROBE.out.map        { id, f -> f }.collect().ifEmpty([]),
         PINV_SCREEN.out.map          { id, f -> f }.collect().ifEmpty([]),
         IS_SCREEN.out.map            { id, f -> f }.collect().ifEmpty([])
+    )
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PHASE 4b: Plasmid–AMR contig map (all species)
+    // ─────────────────────────────────────────────────────────────────────────
+    ch_plasmid_amr_input = PLASMIDFINDER_ECOLI.out
+        .join(AMRFINDER_ECOLI.out)
+        .mix(
+            PLASMIDFINDER_SALMONELLA.out.join(AMRFINDER_SALMONELLA.out),
+            PLASMIDFINDER_SHIGELLA.out.join(AMRFINDER_SHIGELLA.out)
+        )
+
+    PLASMID_AMR_MAP(ch_plasmid_amr_input)
+
+    AGGREGATE_PLASMID_AMR_MAP(
+        PLASMID_AMR_MAP.out.map.map { id, f -> f }.collect()
     )
 
     // ─────────────────────────────────────────────────────────────────────────
