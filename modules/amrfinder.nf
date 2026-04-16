@@ -19,14 +19,19 @@ process AMRFINDER {
 
     script:
     """
+    # AMRFinder Plus does not bundle its database with the conda package.
+    # Download it on first use; subsequent runs reuse the cached copy.
+    DB_DIR="\$(dirname \$(which amrfinder))/../share/amrfinderplus/data"
+    if [ ! -d "\${DB_DIR}/latest" ]; then
+        amrfinder -u
+    fi
+
     amrfinder \\
         --nucleotide ${fasta} \\
         --organism   ${organism} \\
         --plus \\
         --threads    ${task.cpus} \\
         --name       ${sample_id} \\
-        --output     ${sample_id}_amrfinder.tsv \\
-    || echo -e 'Name\\tProtein identifier\\tContig id\\tStart\\tStop\\tStrand\\tGene symbol\\tSequence name\\tScope\\tElement type\\tElement subtype\\tClass\\tSubclass\\tMethod\\tTarget length\\tReference sequence length\\t% Coverage of reference sequence\\t% Identity to reference sequence\\tAlignment length\\tAccession of closest sequence\\tName of closest sequence\\tHMM id\\tHMM description' \\
-         > ${sample_id}_amrfinder.tsv
+        --output     ${sample_id}_amrfinder.tsv
     """
 }
