@@ -29,6 +29,7 @@ from collections import Counter, defaultdict
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.colors as mcolors
+import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -520,8 +521,10 @@ def plot_tree_amr(
             sp.set_visible(False)
 
         # Drug-class sub-labels below the gene tick labels
+        # Use figure-fraction coordinates so placement is independent of
+        # sample count / figure height, and labels always appear above the
+        # ST legend (which sits at bbox_to_anchor y = -0.12 in figure fraction).
         if gene_to_cls:
-            trans = ax_gene.get_xaxis_transform()
             cls_spans: list[tuple[str, int, int]] = []
             prev_cls, span_start = None, 0
             for j, cls in enumerate(gene_to_cls):
@@ -532,22 +535,40 @@ def plot_tree_amr(
             if prev_cls is not None:
                 cls_spans.append((prev_cls, span_start, len(gene_to_cls) - 1))
 
-            # Scale bracket/label gap with axes height: shorter axes (fewer
-            # samples) need more negative offset so labels clear the gene ticks
-            cls_bracket_y = -max(0.28, 4.5 / n)
-            cls_text_y    = cls_bracket_y - 0.09
+            # Gene tick labels (rotation=40°, fontsize=6.5) extend ~0.75"
+            # below the axes bottom. Place bracket 0.12" below that, and
+            # the class text 0.22" below the bracket — in figure-fraction.
+            ax_pos  = ax_gene.get_position()
+            xlim    = ax_gene.get_xlim()
+            x_span  = max(xlim[1] - xlim[0], 1)
+
+            fig_y_bracket = ax_pos.y0 - (0.75 + 0.12) / fig_h
+            fig_y_text    = fig_y_bracket - 0.22 / fig_h
 
             for cls_name, j0, j1 in cls_spans:
-                x_mid = (j0 + j1) / 2.0
-                label = CLASS_LABEL.get(cls_name, cls_name.capitalize())
-                # Bracket line spanning the class columns
-                ax_gene.plot([j0 - 0.4, j1 + 0.4], [cls_bracket_y, cls_bracket_y],
-                             transform=trans, color="#555555", lw=0.9, clip_on=False)
-                # Label rotated 40° to match gene tick labels
-                ax_gene.text(x_mid, cls_text_y, label,
-                             transform=trans, ha="right", va="top",
-                             fontsize=6.5, fontweight="bold", color="#333333",
-                             rotation=40, rotation_mode="anchor")
+                x_mid  = (j0 + j1) / 2.0
+                label  = CLASS_LABEL.get(cls_name, cls_name.capitalize())
+
+                # Convert gene-column data-x to figure fraction
+                x0_fig   = ax_pos.x0 + (j0 - 0.4 - xlim[0]) / x_span * ax_pos.width
+                x1_fig   = ax_pos.x0 + (j1 + 0.4 - xlim[0]) / x_span * ax_pos.width
+                xmid_fig = ax_pos.x0 + (x_mid    - xlim[0]) / x_span * ax_pos.width
+
+                # Bracket line
+                fig.add_artist(mlines.Line2D(
+                    [x0_fig, x1_fig], [fig_y_bracket, fig_y_bracket],
+                    transform=fig.transFigure, color="#555555", lw=0.9,
+                    clip_on=False
+                ))
+                # Class label
+                fig.text(
+                    xmid_fig, fig_y_text, label,
+                    transform=fig.transFigure,
+                    ha="right", va="top",
+                    fontsize=6.5, fontweight="bold", color="#333333",
+                    rotation=40, rotation_mode="anchor",
+                    clip_on=False
+                )
 
         # (AMR genes legend consolidated into tree-panel legend below)
 
