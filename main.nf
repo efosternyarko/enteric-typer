@@ -630,11 +630,13 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 4b: Plasmid–AMR contig map (all species)
     // ─────────────────────────────────────────────────────────────────────────
+    // Join: (id, plasmidfinder_tsv) + (id, amrfinder_tsv) + (id, fasta)
     ch_plasmid_amr_input = PLASMIDFINDER_ECOLI.out
         .join(AMRFINDER_ECOLI.out)
+        .join(ch_ecoli_typed)
         .mix(
-            PLASMIDFINDER_SALMONELLA.out.join(AMRFINDER_SALMONELLA.out),
-            PLASMIDFINDER_SHIGELLA.out.join(AMRFINDER_SHIGELLA.out)
+            PLASMIDFINDER_SALMONELLA.out.join(AMRFINDER_SALMONELLA.out).join(ch_salmonella_typed),
+            PLASMIDFINDER_SHIGELLA.out.join(AMRFINDER_SHIGELLA.out).join(ch_shigella_typed)
         )
 
     PLASMID_AMR_MAP(ch_plasmid_amr_input)

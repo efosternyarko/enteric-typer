@@ -15,7 +15,7 @@ process PLASMID_AMR_MAP {
     publishDir "${params.outdir}/plasmid_amr_map", mode: 'copy', overwrite: true
 
     input:
-    tuple val(sample_id), path(plasmidfinder_tsv), path(amrfinder_tsv)
+    tuple val(sample_id), path(plasmidfinder_tsv), path(amrfinder_tsv), path(fasta)
 
     output:
     tuple val(sample_id), path("${sample_id}_plasmid_amr_map.tsv"), emit: map
@@ -25,6 +25,7 @@ process PLASMID_AMR_MAP {
     plasmid_amr_map.py \\
         --plasmidfinder ${plasmidfinder_tsv} \\
         --amrfinder     ${amrfinder_tsv} \\
+        --fasta         ${fasta} \\
         --sample        ${sample_id} \\
         --output        ${sample_id}_plasmid_amr_map.tsv
     """

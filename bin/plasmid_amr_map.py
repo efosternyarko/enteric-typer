@@ -28,8 +28,40 @@ def main():
     parser.add_argument('--plasmidfinder', required=True)
     parser.add_argument('--amrfinder',     required=True)
     parser.add_argument('--sample',        required=True)
+    parser.add_argument('--fasta',         required=True,
+                        help='Assembly FASTA — used to determine contig lengths')
     parser.add_argument('--output',        required=True)
+    # Size thresholds for likely_location inference
+    parser.add_argument('--chrom_min_bp',  type=int, default=1_000_000,
+                        help='Contigs >= this length are called chromosome (default 1 Mb)')
+    parser.add_argument('--plasmid_max_bp', type=int, default=500_000,
+                        help='No-replicon contigs < this length are called plasmid_fragment (default 500 kb)')
     args = parser.parse_args()
+
+    # ── Contig lengths from FASTA ─────────────────────────────────────────────
+    contig_lengths = {}
+    current, length = None, 0
+    with open(args.fasta) as fh:
+        for line in fh:
+            if line.startswith('>'):
+                if current is not None:
+                    contig_lengths[normalise_contig(current)] = length
+                current = line[1:].strip()
+                length = 0
+            else:
+                length += len(line.strip())
+    if current is not None:
+        contig_lengths[normalise_contig(current)] = length
+
+    def likely_location(contig, has_replicon):
+        bp = contig_lengths.get(contig, 0)
+        if has_replicon:
+            return 'plasmid'
+        if bp >= args.chrom_min_bp:
+            return 'chromosome'
+        if bp < args.plasmid_max_bp:
+            return 'plasmid_fragment'
+        return 'unknown'
 
     # ── PlasmidFinder: contig → list of (replicon, identity, coverage) ────────
     # Columns: sample Plasmid Identity "Query / Template length" Contig ...
@@ -100,7 +132,7 @@ def main():
 
         for replicon, pct_id, pct_cov in pf_hits:
             rows.append((args.sample, replicon, contig, genes, classes,
-                         pct_id, pct_cov))
+                         pct_id, pct_cov, 'plasmid'))
 
     # AMR genes on contigs with no replicon identified
     replicon_contigs = set(pf_contigs.keys())
@@ -109,13 +141,14 @@ def main():
             continue
         genes   = ';'.join(sorted(set(g for g, _ in amr_hits)))
         classes = ';'.join(sorted(set(c for _, c in amr_hits)))
+        loc     = likely_location(contig, has_replicon=False)
         rows.append((args.sample, 'no_replicon', contig, genes, classes,
-                     '-', '-'))
+                     '-', '-', loc))
 
     # ── Write output ──────────────────────────────────────────────────────────
     with open(args.output, 'w') as out:
         out.write('sample_id\treplicon\tcontig\tamr_genes\tdrug_classes\t'
-                  'identity\tcoverage\n')
+                  'identity\tcoverage\tlikely_location\n')
         for r in rows:
             out.write('\t'.join(str(x) for x in r) + '\n')
 
