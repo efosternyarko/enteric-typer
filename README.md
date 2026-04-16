@@ -1,3 +1,5 @@
+🌐 **English** | [Français](README.fr.md) | [Português](README.pt.md)
+
 # enteric-typer
 
 A species-gated genotyping workflow for enteric pathogens. Given a folder of
@@ -43,7 +45,7 @@ Input assemblies (folder or samplesheet)
 │  ──────────────────────────────────────────────────────────────────────   │
 │  Genome size    E. coli / Shigella  4.3 – 5.9 Mb  [1]                    │
 │                 Salmonella          4.1 – 6.6 Mb  [2]                    │
-│  Contamination  Kraken2 secondary species < 3 % of total sequences        │
+│  Contamination  Kraken2 secondary species < 3 % of total contigs           │
 │                 (optional — provide --kraken2_db; skipped if not set)     │
 └───────────────────────────────────────────────────────────────────────────┘
         │

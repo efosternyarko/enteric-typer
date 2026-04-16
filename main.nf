@@ -65,6 +65,7 @@ include { AGGREGATE_KRAKEN2                                         } from './mo
 include { AGGREGATE_ASSEMBLY_QC                                     } from './modules/aggregate_assembly_qc'
 include { PLASMID_AMR_MAP                                           } from './modules/plasmid_amr_map'
 include { AGGREGATE_PLASMID_AMR_MAP                                 } from './modules/aggregate_plasmid_amr_map'
+include { AMRFINDER_UPDATE                                          } from './modules/amrfinder_update'
 
 // ── Help ──────────────────────────────────────────────────────────────────────
 if (params.help) {
@@ -472,10 +473,16 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // AMRFINDER pre-step: download database once before any per-sample runs
+    // ─────────────────────────────────────────────────────────────────────────
+    AMRFINDER_UPDATE()
+    ch_amrdb_ready = AMRFINDER_UPDATE.out.ready.map { f -> f.text.trim() }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // PHASE 2a: E. coli typing (parallel per sample)
     // ─────────────────────────────────────────────────────────────────────────
     MLST_ECOLI(ch_ecoli_typed,          'ecoli_achtman_4')
-    AMRFINDER_ECOLI(ch_ecoli_typed,     'Escherichia')
+    AMRFINDER_ECOLI(ch_ecoli_typed,     'Escherichia',  ch_amrdb_ready)
     ECTYPER(ch_ecoli_typed)
     KLEBORATE(ch_ecoli_typed)
     EZCLERMONT(ch_ecoli_typed)
@@ -523,7 +530,7 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
     // PHASE 2b: Salmonella typing (parallel per sample)
     // ─────────────────────────────────────────────────────────────────────────
     MLST_SALMONELLA(ch_salmonella_typed,          'senterica_achtman_2')
-    AMRFINDER_SALMONELLA(ch_salmonella_typed,     'Salmonella')
+    AMRFINDER_SALMONELLA(ch_salmonella_typed,     'Salmonella',  ch_amrdb_ready)
     SISTR(ch_salmonella_typed)
     PLASMIDFINDER_SALMONELLA(ch_salmonella_typed, 'enterobacteriaceae')
 
@@ -538,7 +545,7 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
                                checkIfExists: true)
 
     MLST_SHIGELLA(ch_shigella_typed,             'ecoli_achtman_4')
-    AMRFINDER_SHIGELLA(ch_shigella_typed,        'Escherichia')
+    AMRFINDER_SHIGELLA(ch_shigella_typed,        'Escherichia',  ch_amrdb_ready)
     SHIGEIFINDER(ch_shigella_typed)
     PLASMIDFINDER_SHIGELLA(ch_shigella_typed,    'enterobacteriaceae')
     MYKROBE(ch_shigella_typed)

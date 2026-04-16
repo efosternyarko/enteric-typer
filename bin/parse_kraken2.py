@@ -2,9 +2,14 @@
 """
 parse_kraken2.py — parse a Kraken2 report and flag contaminated assemblies.
 
+Kraken2 is run on the assembled FASTA so each sequence in the report is one
+contig. The percentage column therefore reflects the fraction of contigs
+assigned to each taxon, equivalent to Enterobase's contig-level contamination
+criterion.
+
 A sample fails if the combined percentage of all secondary species
 (species-level hits other than the dominant species) exceeds --max_secondary
-percent of total sequences (including unclassified).
+percent of total contigs (including unclassified).
 
 Output TSV columns:
     sample_id  top_species  top_pct  secondary_pct  status  reason
@@ -27,7 +32,7 @@ def main():
     parser.add_argument('--sample',        required=True,
                         help='Sample ID')
     parser.add_argument('--max_secondary', type=float, default=3.0,
-                        help='Maximum allowed secondary species %% of total sequences '
+                        help='Maximum allowed secondary species %% of total contigs '
                              '(default: 3.0)')
     parser.add_argument('--output',        required=True,
                         help='Output TSV path')

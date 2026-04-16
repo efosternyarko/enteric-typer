@@ -1,6 +1,11 @@
 // ── KRAKEN2_SCREEN: contamination screening on assembled FASTAs ──────────────
 // Classifies contigs with Kraken2 against a user-supplied database and flags
-// samples where secondary species exceed --max_contamination % of total sequences.
+// samples where secondary species exceed --max_contamination % of total contigs.
+//
+// Each contig in the FASTA is one sequence, so Kraken2's report percentages
+// directly reflect the fraction of contigs assigned to each taxon — equivalent
+// to Enterobase's contig-level contamination criterion (< 80 % contigs assigned
+// to the correct taxon).
 //
 // Inputs:
 //   fasta  — assembled FASTA (any source)

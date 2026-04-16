@@ -13,19 +13,13 @@ process AMRFINDER {
     input:
     tuple val(sample_id), path(fasta)
     val(organism)
+    val(db_ready)   // sentinel from AMRFINDER_UPDATE — ensures DB exists before any sample runs
 
     output:
     tuple val(sample_id), path("${sample_id}_amrfinder.tsv")
 
     script:
     """
-    # AMRFinder Plus does not bundle its database with the conda package.
-    # Download it on first use; subsequent runs reuse the cached copy.
-    DB_DIR="\$(dirname \$(which amrfinder))/../share/amrfinderplus/data"
-    if [ ! -d "\${DB_DIR}/latest" ]; then
-        amrfinder -u
-    fi
-
     amrfinder \\
         --nucleotide ${fasta} \\
         --organism   ${organism} \\
