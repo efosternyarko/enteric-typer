@@ -35,9 +35,9 @@ Input assemblies (folder or samplesheet)
 │  1. SPECIES & QC CHECK                                                    │
 │                                                                           │
 │  Species identification — Mash distance against 13-genome reference       │
-│  sketch; Shigella-priority routing: any sample within Mash distance       │
-│  0.025 of a Shigella reference is classified Shigella (handles            │
-│  S. sonnei, which is phylogenetically nested within E. coli B2)           │
+│  sketch; closest-reference-wins (same approach as Kleborate). Shigella   │
+│  isolates are correctly identified because genuine Shigella are closer    │
+│  to Shigella references than to any E. coli reference.                    │
 │                                                                           │
 │  Assembly QC filters  (failures logged and excluded from typing)          │
 │  ──────────────────────────────────────────────────────────────────────   │
@@ -320,14 +320,14 @@ Reference genomes included:
 | *S. dysenteriae* | Sd197 | GCF_000012005.1 |
 | *K. pneumoniae* | HS11286 | GCF_000240185.1 |
 
-> *Shigella* speciation uses a **priority rule**: if any Shigella reference
-> genome is within Mash distance 0.025, the sample is classified as Shigella
-> regardless of overall best-hit distance. This is necessary because
-> *S. sonnei* is phylogenetically nested within *E. coli* B2 and can score
-> marginally closer to *E. coli* CFT073 than to other Shigella references.
-> The 0.025 threshold safely separates all four *Shigella* species from true
-> *E. coli* (minimum observed Shigella–Shigella-ref distance: 0.018;
-> minimum E. coli–Shigella-ref distance: 0.020).
+> Species identification uses **closest-reference-wins** (same approach as
+> Kleborate): the species group with the lowest Mash distance to any reference
+> in the sketch is assigned. Genuine *Shigella* isolates are correctly
+> identified because their closest reference is always a *Shigella* genome
+> (Mash dist < 0.012), while *E. coli* phylogroup B2 isolates — which are
+> phylogenetically close to *Shigella* but are not *Shigella* — score lower
+> distances to *E. coli* references (~0.007) than to any *Shigella* reference
+> (≥ 0.014) and are correctly called *E. coli*.
 
 ---
 

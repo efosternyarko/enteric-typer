@@ -43,22 +43,23 @@ process SPECIES_CHECK {
                 best[sp] = dist
         }
         END {
-            # Shigella-priority rule: Shigella and E. coli are phylogenetically
-            # interleaved; if ANY Shigella reference is within 0.025 the sample
-            # is Shigella, even when an E. coli reference is marginally closer.
-            if ("Shigella" in best && best["Shigella"] < 0.025) {
-                print "Shigella\\t" best["Shigella"]
-            } else {
-                best_sp   = ""
-                best_dist = 1.0
-                for (sp in best) {
-                    if (best[sp] < best_dist) {
-                        best_dist = best[sp]
-                        best_sp   = sp
-                    }
+            # Closest-reference-wins (same approach as Kleborate).
+            # A previous Shigella-priority rule (< 0.025 → Shigella regardless
+            # of E. coli distance) was removed because it misclassified E. coli
+            # phylogroup B2 isolates whose Mash distance to Shigella references
+            # (0.014–0.025) is below the threshold but whose distance to E. coli
+            # references is clearly lower (~0.007). Genuine Shigella isolates
+            # are closer to Shigella references than to any E. coli reference
+            # and are correctly identified without a priority rule.
+            best_sp   = ""
+            best_dist = 1.0
+            for (sp in best) {
+                if (best[sp] < best_dist) {
+                    best_dist = best[sp]
+                    best_sp   = sp
                 }
-                print best_sp "\\t" best_dist
             }
+            print best_sp "\\t" best_dist
         }' > ${sample_id}_species.txt
 
     # Guard: ensure file is non-empty
