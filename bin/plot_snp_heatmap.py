@@ -73,6 +73,9 @@ def cluster_matrix(mat: pd.DataFrame) -> pd.DataFrame:
 
 # ── Main plot ─────────────────────────────────────────────────────────────────
 
+LABEL_MAX = 200   # show individual sample labels up to this many samples
+
+
 def plot_snp_heatmap(matrix_path: str, species_label: str, outdir: str) -> None:
     mat = load_matrix(matrix_path)
     if mat.empty:
@@ -82,11 +85,31 @@ def plot_snp_heatmap(matrix_path: str, species_label: str, outdir: str) -> None:
     n = mat.shape[0]
     mat = cluster_matrix(mat)
 
-    # Figure sizing: scale cell size with n, but cap width/height
-    cell_px = max(6, min(20, 600 // n))
-    fig_size = max(6, min(24, n * cell_px / 72))
+    show_labels = n <= LABEL_MAX
 
-    fig, ax = plt.subplots(figsize=(fig_size + 1.5, fig_size))
+    # Font size: shrink gracefully as n grows; floor at 4 pt
+    label_fs = max(4, min(8, int(700 / n))) if show_labels else 0
+
+    # Figure sizing
+    # Cell size in inches: shrink with n but keep minimum legibility
+    cell_in = max(0.055, min(0.20, 8.0 / n))
+    heat_sz = n * cell_in                          # heatmap square side
+
+    if show_labels:
+        # Extra margin for rotated x-tick labels (below) and y-tick labels (left)
+        # Approximate label length from a typical sample ID (≤ 20 chars at label_fs pt)
+        label_margin = max(1.0, label_fs * 20 * 0.6 / 72)   # chars × pts-per-char / pts-per-inch
+        fig_w = heat_sz + label_margin + 1.2        # +1.2 for colorbar
+        fig_h = heat_sz + label_margin
+    else:
+        fig_w = heat_sz + 1.5
+        fig_h = heat_sz
+
+    # Cap figure dimensions to avoid gigantic files
+    fig_w = min(fig_w, 30.0)
+    fig_h = min(fig_h, 30.0)
+
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
     # Choose colourmap: white→dark-blue for SNP counts
     cmap = plt.get_cmap("Blues")
@@ -95,16 +118,17 @@ def plot_snp_heatmap(matrix_path: str, species_label: str, outdir: str) -> None:
     im = ax.imshow(mat.values, aspect="auto", cmap=cmap, vmin=0, vmax=vmax,
                    interpolation="nearest")
 
-    # Axis labels
-    if n <= 60:
+    # Axis tick labels
+    if show_labels:
         ax.set_xticks(range(n))
-        ax.set_xticklabels(mat.columns, rotation=90, fontsize=max(4, 8 - n // 20))
+        ax.set_xticklabels(mat.columns, rotation=90, fontsize=label_fs, ha="center")
         ax.set_yticks(range(n))
-        ax.set_yticklabels(mat.index, fontsize=max(4, 8 - n // 20))
+        ax.set_yticklabels(mat.index, fontsize=label_fs)
     else:
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.set_xlabel(f"{n} samples (labels hidden at this scale)", fontsize=9)
+        ax.set_xlabel(f"{n} samples (labels hidden at this scale — reduce to ≤{LABEL_MAX} to show)",
+                      fontsize=9)
 
     sp_display = "E. coli" if species_label == "ecoli" else "Salmonella enterica"
     ax.set_title(f"Pairwise whole-genome SNP distances — {sp_display}", fontsize=11, pad=8)
