@@ -702,7 +702,8 @@ def _panel_amr(df: pd.DataFrame, ax: plt.Axes) -> None:
     # ── Legend (outside, below or right) ─────────────────────────────────────
     shown = list(legend_entries.items())
     patches = [mpatches.Patch(facecolor=c, label=g, linewidth=0) for g, c in shown]
-    ax.legend(handles=patches, fontsize=7, ncol=1,
+    ncol_leg = 2 if len(shown) > 8 else 1
+    ax.legend(handles=patches, fontsize=7, ncol=ncol_leg,
               bbox_to_anchor=(1.02, 1), loc="upper left",
               frameon=False, handlelength=1.2, handleheight=1.2,
               title="Gene", title_fontsize=7.5)
@@ -1123,7 +1124,12 @@ def fig_virulence(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int = 25) 
 
 def _fig_virulence_ecoli(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int) -> None:
     has_pathovar  = "kleborate_pathovar" in df.columns
-    has_markers   = any(col in df.columns for col, _ in PATHOVAR_MARKERS)
+    # Only show InPEC marker panel if at least one sample actually carries a marker;
+    # columns present but all '-' (no InPEC in the dataset) → skip the panel.
+    has_markers   = any(
+        col in df.columns and df[col].apply(_marker_present).any()
+        for col, _ in PATHOVAR_MARKERS
+    )
     has_amr_vir   = "amrfinder_virulence_genes" in df.columns
 
     if not has_pathovar and not has_markers and not has_amr_vir:
@@ -1163,7 +1169,7 @@ def _fig_virulence_ecoli(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int
         ax.set_yticks(y); ax.set_yticklabels(lbls, fontsize=8.5)
         ax.invert_yaxis()
         ax.set_xlabel("Number of isolates")
-        ax.set_title("A. Pathotype (Kleborate)", fontweight="bold")
+        ax.set_title(f"{chr(64 + ax_idx)}. Pathotype (Kleborate)", fontweight="bold")
         ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True, nbins=5))
 
     # ── Panel B: Pathovar marker prevalence ──────────────────────────────────
@@ -1189,7 +1195,7 @@ def _fig_virulence_ecoli(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int
         ax.set_yticks(y); ax.set_yticklabels(lbls, fontsize=8)
         ax.invert_yaxis()
         ax.set_xlabel("Prevalence (% of isolates)")
-        ax.set_title("B. Virulence gene markers (InPEC)", fontweight="bold")
+        ax.set_title(f"{chr(64 + ax_idx)}. Virulence gene markers (InPEC)", fontweight="bold")
         ax.set_xlim(0, 108)
         ax.xaxis.set_major_locator(plt.MultipleLocator(20))
 
@@ -1217,7 +1223,7 @@ def _fig_virulence_ecoli(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int
             ax.set_yticklabels(glbls, fontsize=7.5, fontstyle="italic")
             ax.invert_yaxis()
             ax.set_xlabel("Prevalence (% of isolates)")
-            ax.set_title("C. Virulence genes (AMRFinder)", fontweight="bold")
+            ax.set_title(f"{chr(64 + ax_idx + 1)}. Virulence genes (AMRFinder)", fontweight="bold")
             ax.set_xlim(0, 108)
             ax.xaxis.set_major_locator(plt.MultipleLocator(20))
 

@@ -127,6 +127,9 @@ ST_PHYLOGROUP: dict[str, str] = {
     "ST1193":"B2",
 }
 _SENTINEL = {"", "-", "NA", "nan", "None", "none"}
+# Single colour used for plasmid-present blocks in Panel C (tree heatmap).
+# Plain presence/absence — drug-class breakdown is in Panels A and B.
+_PLASMID_PRESENT_COLOR = "#2471a3"   # medium navy blue
 _REPLICON_SENTINELS = {
     "no_replicon", "No replicons found", "No replicon",
     "no_replicons", "No replicons", "No plasmids found",
@@ -295,9 +298,11 @@ def _draw_panel_a(
     tips: list[str],
     meta: pd.DataFrame,
     top_reps: list[str],
-    rep_dom_color: dict,
     mat: np.ndarray,
-) -> None:
+) -> plt.Axes:
+    """Draws Panel C (tree + plasmid heatmap). Returns ax_tree for label placement.
+    Heatmap uses a single colour (_PLASMID_PRESENT_COLOR) for presence — drug-class
+    breakdown is shown in Panels A and B instead."""
     n = len(tips)
 
     # ── sub-axes widths ───────────────────────────────────────────────────────
@@ -375,13 +380,13 @@ def _draw_panel_a(
     ax_pg.set_title("PG", fontsize=7, fontweight="bold", pad=3)
     for sp in ax_pg.spines.values(): sp.set_visible(False)
 
-    # ── Plasmid heatmap (RGB matrix) ──────────────────────────────────────────
+    # ── Plasmid heatmap (single presence colour) ─────────────────────────────
     if n_reps > 0:
         absent_rgb  = np.array(mcolors.to_rgb("#f5f5f5"))
+        present_rgb = np.array(mcolors.to_rgb(_PLASMID_PRESENT_COLOR))
         rgb_mat     = np.tile(absent_rgb, (n, n_reps, 1)).astype(float)
-        for j, rep in enumerate(top_reps):
-            present_rgb = np.array(mcolors.to_rgb(rep_dom_color[rep]))
-            for i in range(n):
+        for i in range(n):
+            for j in range(n_reps):
                 if mat[i, j]:
                     rgb_mat[i, j] = present_rgb
 
@@ -391,7 +396,7 @@ def _draw_panel_a(
         ax_plas.set_xticks(np.arange(n_reps))
         ax_plas.set_xticklabels(plas_labels, rotation=40, ha="right", fontsize=6.5)
         ax_plas.set_yticks([])
-        ax_plas.set_title("Plasmid replicons (dominant AMR class)",
+        ax_plas.set_title("Plasmid replicons (presence/absence)",
                            fontsize=7.5, fontweight="bold", pad=3)
         for sp in ax_plas.spines.values(): sp.set_visible(False)
 
@@ -422,24 +427,10 @@ def _draw_panel_a(
             handlelength=1, labelspacing=0.25, columnspacing=0.8,
         )
 
-    # Dominant drug-class colour key (right of plasmid heatmap)
-    if n_reps > 0:
-        pastel_to_cls = {v: k for k, v in PLASMID_CLASS_COLOR.items()}
-        seen_dom = [
-            pastel_to_cls[col]
-            for col in dict.fromkeys(rep_dom_color[r] for r in top_reps)
-            if col in pastel_to_cls
-        ]
-        dom_handles = [mpatches.Patch(color="none", label="Dominant AMR class")]
-        for cls in seen_dom:
-            lbl = CLASS_LABEL.get(cls, cls.title())
-            dom_handles.append(mpatches.Patch(facecolor=PLASMID_CLASS_COLOR[cls], label=f"  {lbl}"))
-        ax_plas.legend(handles=dom_handles, fontsize=6, loc="lower right",
-                       bbox_to_anchor=(1.0, -0.28), handlelength=1,
-                       frameon=True, framealpha=0.88, edgecolor="none", labelspacing=0.25)
+    return ax_tree
 
 
-# ── Panel B: stacked-bar chart (all drug classes by dominant-class allocation) ─
+# ── Panel A: stacked-bar chart (all drug classes by dominant-class allocation) ─
 
 def _draw_panel_b(
     ax: plt.Axes,
@@ -616,11 +607,11 @@ def plot_plasmid_overview(
     panel_a_h   = max(6.0,  n * row_h + 2.0)
     panel_bot_h = max(5.0,  top_n * 0.40 + 2.5)
     fig_h       = panel_a_h + panel_bot_h + 1.5   # padding
-    fig_w       = 20.0
+    fig_w       = 22.0   # wider to give right-side breathing room
 
     fig = plt.figure(figsize=(fig_w, fig_h))
-    # Row 0 (top)  = Panels B + C  (stacked bars | bubble matrix)
-    # Row 1 (bottom) = Panel A (tree | ST | PG | plasmid heatmap, full width)
+    # Row 0 (top)  = Panels A + B  (stacked bars | bubble matrix)
+    # Row 1 (bottom) = Panel C (tree | ST | PG | plasmid heatmap, full width)
     outer = gridspec.GridSpec(
         2, 1, figure=fig,
         height_ratios=[panel_bot_h, panel_a_h],
@@ -629,36 +620,62 @@ def plot_plasmid_overview(
     top_gs = gridspec.GridSpecFromSubplotSpec(
         1, 2,
         subplot_spec=outer[0],
-        wspace=0.30,
+        wspace=0.35,
         width_ratios=[0.42, 0.58],
     )
-    ax_b = fig.add_subplot(top_gs[0])
-    ax_c = fig.add_subplot(top_gs[1])
+    ax_a = fig.add_subplot(top_gs[0])
+    ax_b = fig.add_subplot(top_gs[1])
 
-    # ── Panel B (top-left) ────────────────────────────────────────────────────
-    _draw_panel_b(ax_b, df_map, top_reps, n_isolates, pair_dom)
+    # ── Panel A (top-left): stacked bars ─────────────────────────────────────
+    _draw_panel_b(ax_a, df_map, top_reps, n_isolates, pair_dom)
 
-    # ── Panel C (top-right) ───────────────────────────────────────────────────
-    _draw_panel_c(ax_c, df_map, top_reps, n_isolates)
+    # ── Panel B (top-right): bubble matrix ───────────────────────────────────
+    _draw_panel_c(ax_b, df_map, top_reps, n_isolates)
 
-    # ── Panel A (bottom, full width) ──────────────────────────────────────────
+    # ── Panel C (bottom, full width): tree + plasmid heatmap ─────────────────
     if tree_root is not None and pos is not None:
-        _draw_panel_a(fig, outer[1], tree_root, pos, tips, meta,
-                      top_reps, rep_dom_color, mat)
+        ax_tree = _draw_panel_a(fig, outer[1], tree_root, pos, tips, meta,
+                                top_reps, mat)
     else:
-        ax_a = fig.add_subplot(outer[1])
-        ax_a.text(0.5, 0.5, "No tree available", ha="center", va="center",
-                  transform=ax_a.transAxes, color="grey", fontsize=12)
-        ax_a.axis("off")
+        ax_tree = fig.add_subplot(outer[1])
+        ax_tree.text(0.5, 0.5, "No tree available", ha="center", va="center",
+                     transform=ax_tree.transAxes, color="grey", fontsize=12)
+        ax_tree.axis("off")
 
-    # ── Panel labels ──────────────────────────────────────────────────────────
-    # B and C are in the top row; A is in the bottom row
-    y_a_top = panel_a_h / fig_h + 0.05   # approximate top of Panel A
-    fig.text(0.01, 0.985, "B", fontsize=14, fontweight="bold", va="top")
-    fig.text(0.44, 0.985, "C", fontsize=14, fontweight="bold", va="top")
-    fig.text(0.01, y_a_top, "A", fontsize=14, fontweight="bold", va="top")
+    # ── Panel labels — top-left corner of each panel's first axis ───────────
+    for ax, lbl in [(ax_a, "A"), (ax_b, "B"), (ax_tree, "C")]:
+        ax.text(-0.04, 1.03, lbl, transform=ax.transAxes,
+                fontsize=14, fontweight="bold", va="bottom", ha="left")
 
-    _save(fig, outdir, f"{prefix}_plasmid_overview")
+    _save(fig, outdir, f"{prefix}_fig4_plasmid_overview")
+
+    # ── Individual panel figures ──────────────────────────────────────────────
+    indiv_dir = outdir / "individual_plasmid_plots"
+    indiv_dir.mkdir(parents=True, exist_ok=True)
+
+    # Panel A standalone: stacked bars
+    fig_a, ax_ia = plt.subplots(figsize=(8, max(4.0, top_n * 0.40 + 2.0)))
+    _draw_panel_b(ax_ia, df_map, top_reps, n_isolates, pair_dom)
+    ax_ia.text(-0.04, 1.03, "A", transform=ax_ia.transAxes,
+               fontsize=14, fontweight="bold", va="bottom", ha="left")
+    _save(fig_a, indiv_dir, f"{prefix}_fig4_panel_a_replicon_bars")
+
+    # Panel B standalone: bubble matrix
+    fig_b, ax_ib = plt.subplots(figsize=(9, max(4.0, top_n * 0.40 + 2.0)))
+    _draw_panel_c(ax_ib, df_map, top_reps, n_isolates)
+    ax_ib.text(-0.04, 1.03, "B", transform=ax_ib.transAxes,
+               fontsize=14, fontweight="bold", va="bottom", ha="left")
+    _save(fig_b, indiv_dir, f"{prefix}_fig4_panel_b_bubble_matrix")
+
+    # Panel C standalone: tree + plasmid heatmap
+    if tree_root is not None and pos is not None:
+        fig_c = plt.figure(figsize=(fig_w, panel_a_h + 1.5))
+        gs_c  = gridspec.GridSpec(1, 1, figure=fig_c)
+        ax_ic = _draw_panel_a(fig_c, gs_c[0], tree_root, pos, tips, meta,
+                               top_reps, mat)
+        ax_ic.text(-0.04, 1.03, "C", transform=ax_ic.transAxes,
+                   fontsize=14, fontweight="bold", va="bottom", ha="left")
+        _save(fig_c, indiv_dir, f"{prefix}_fig4_panel_c_tree_heatmap")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
