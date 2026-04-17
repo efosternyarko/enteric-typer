@@ -106,7 +106,11 @@ E. coli  Salmonella  Shigella   (other species logged and skipped)
 │           D — MDR burden per isolate                                     │
 │  Fig 2  Phylogenetic tree + ST/phylogroup strips + AMR heatmap          │
 │  Fig 3  Top acquired AMR genes (intrinsic genes excluded)               │
-│  Fig 4  Plasmid replicon types                                          │
+│  Fig 4  Plasmid overview (3 panels):                                    │
+│           A — Replicon prevalence stacked by AMR drug class             │
+│           B — Plasmid–AMR co-occurrence bubble matrix                   │
+│           C — SNP phylogeny + per-sample replicon presence heatmap      │
+│         Individual panels also saved to individual_plasmid_plots/       │
 │  Fig 5  Virulence genes / pathotype                                     │
 │  Fig 6  AMR drug class prevalence by MLST sequence type                 │
 │  Fig 7  AMR drug class prevalence by serovar / Clermont phylogroup      │
@@ -467,6 +471,10 @@ results/
 │   ├── report.html
 │   └── dag.svg
 │
+├── qc/
+│   ├── assembly_size_qc_summary.tsv  ← Pass/fail for every input sample (size + contamination)
+│   └── *_kraken2_summary.tsv         ← Per-sample Kraken2 contamination results (if enabled)
+│
 ├── species_check/
 │   └── *_species.txt              ← best species + Mash distance per sample
 │
@@ -478,6 +486,8 @@ results/
 │   └── *_ectyper.tsv
 ├── kaptive_g2g3/ kaptive_g1g4/
 │   └── *_ktype.tsv                ← K-locus group, locus, type, confidence
+├── kleborate/
+│   └── *_kleborate.tsv            ← Pathotype, Clermont phylogroup, virulence markers
 ├── plasmidfinder_ecoli/
 │   └── *_plasmidfinder.tsv
 │
@@ -509,9 +519,23 @@ results/
 │   ├── ska2_alignment.fasta       ← whole-genome SNP alignment (input to IQ-TREE)
 │   └── snp_matrix.tsv             ← pairwise whole-genome SNP distance matrix
 │
+├── iqtree_{species}/
+│   ├── iqtree.treefile            ← Maximum-likelihood tree (Newick)
+│   ├── iqtree.contree             ← Consensus tree with bootstrap support
+│   ├── iqtree.mldist              ← ML pairwise distance matrix
+│   └── iqtree.iqtree              ← Full IQ-TREE log and model summary
+│
 ├── ecoli_typer_results.tsv         ← Master results table (E. coli)
 ├── salmonella_typer_results.tsv    ← Master results table (Salmonella)
 ├── shigella_typer_results.tsv      ← Master results table (Shigella)
+│
+├── plasmid_amr_map.tsv             ← Per-contig plasmid–AMR linkage table
+│     One row per (sample, replicon). Columns include:
+│       sample_id, replicon, contig_id, drug_classes, likely_location
+│       (chromosome / plasmid inferred from contig length)
+│
+├── plasmid_amr_map/
+│   └── *_plasmid_amr_map.tsv      ← Per-sample plasmid–AMR contig map
 │
 │   All master tables include:
 │     amrfinder_acquired_genes   — resistance genes (intrinsic excluded)
@@ -538,7 +562,24 @@ results/
 │       — AMR gene heatmap grouped by drug class
 │
 ├── {species}_fig3_amr_genes.{pdf,png}      ← Acquired AMR gene frequencies
+│
+├── {species}_fig4_plasmid_overview.{pdf,png}
+│     3-panel plasmid figure:
+│       Panel A — Horizontal stacked-bar chart: replicon prevalence broken
+│                 down by dominant AMR drug class (clinical priority order)
+│       Panel B — Bubble matrix: % of isolates carrying each replicon × drug
+│                 class co-occurrence
+│       Panel C — SNP phylogeny with ST and phylogroup strips + per-sample
+│                 replicon presence/absence heatmap (blue = present)
+│
+├── individual_plasmid_plots/
+│   ├── {species}_fig4_panel_a_replicon_bars.{pdf,png}
+│   ├── {species}_fig4_panel_b_bubble_matrix.{pdf,png}
+│   └── {species}_fig4_panel_c_tree_heatmap.{pdf,png}
+│
 ├── {species}_fig4_plasmid_replicons.{pdf,png}
+│     Standalone replicon prevalence bar chart (also produced by fig4 Panel A)
+│
 ├── {species}_fig5_virulence.{pdf,png}       ← Virulence genes / pathotype
 │
 ├── {species}_fig6_amr_by_st.{pdf,png}
@@ -548,7 +589,10 @@ results/
 │     AMRnet-style tile heatmap: % isolates carrying each drug class, by
 │     serovar (Salmonella) or Clermont phylogroup (E. coli) or serotype (Shigella)
 │
-├── {species}_snp_heatmap.{pdf,png}          ← Pairwise whole-genome SNP distance heatmap
+├── {species}_snp_heatmap.{pdf,png}
+│     Pairwise whole-genome SNP distance heatmap (hierarchically clustered).
+│     Sample labels shown at 90° on both axes for datasets ≤ 200 isolates;
+│     hidden (with count) for larger datasets.
 │
 │ ── Shigella-specific figures ────────────────────────────────────────────
 │
