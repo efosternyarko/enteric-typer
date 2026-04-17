@@ -1104,10 +1104,19 @@ PATHOVAR_COLOR = {
 }
 
 
+_MLST_ST_PAT = re.compile(r"^ST\d+(-\d+LV)?$", re.IGNORECASE)
+
 def _marker_present(val) -> bool:
-    """Kleborate pathovar marker: '+' or gene hit string = present; '-' = absent."""
+    """Kleborate pathovar marker: '+' or gene hit string = present; '-' = absent.
+    Explicitly rejects MLST sequence-type strings (e.g. 'ST3', 'ST36-1LV') that
+    can appear in kleborate_ST_toxin when the aggregation falls back to the bare
+    'ST' column instead of the pathovar-module 'escherichia__pathovar__ST' column."""
     s = str(val).strip()
-    return s not in ("-", "NA", "nan", "None", "")
+    if s in ("-", "NA", "nan", "None", ""):
+        return False
+    if _MLST_ST_PAT.match(s):
+        return False
+    return True
 
 
 def fig_virulence(df: pd.DataFrame, outdir: Path, prefix: str, top_n: int = 25) -> None:

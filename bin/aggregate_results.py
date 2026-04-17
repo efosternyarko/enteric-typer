@@ -322,9 +322,11 @@ def load_kleborate(files: list[str]) -> dict[str, dict]:
                     "kleborate_LT": _na(
                         _get(row, "LT", "escherichia__pathovar__LT") or None
                     ),
-                    # 'ST' column = heat-stable enterotoxin; renamed to avoid MLST ST confusion
+                    # 'ST' in Kleborate pathovar module = heat-stable enterotoxin;
+                    # do NOT fall back to the bare "ST" key, which is the MLST
+                    # sequence-type column and would pollute this field with ST IDs.
                     "kleborate_ST_toxin": _na(
-                        _get(row, "ST", "escherichia__pathovar__ST") or None
+                        _get(row, "escherichia__pathovar__ST") or None
                     ),
                 }
     return results

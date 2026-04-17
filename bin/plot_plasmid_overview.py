@@ -400,8 +400,8 @@ def _draw_panel_a(
                            fontsize=7.5, fontweight="bold", pad=3)
         for sp in ax_plas.spines.values(): sp.set_visible(False)
 
-    # ── Legends ───────────────────────────────────────────────────────────────
-    # PG legend (add as extra artist so ST legend doesn't overwrite it)
+    # ── Legends — PG and ST side by side at the same y ───────────────────────
+    # PG legend (left)
     pg_handles = [mpatches.Patch(color="none", label="Phylogroup")]
     for pg in sorted(seen_pgs):
         pg_handles.append(mpatches.Patch(
@@ -412,7 +412,7 @@ def _draw_panel_a(
                              labelspacing=0.25)
     ax_tree.add_artist(leg_pg)  # keep it when we add the ST legend
 
-    # ST legend below PG legend
+    # ST legend (right of PG, same y)
     if unique_sts:
         st_handles = [mpatches.Patch(facecolor=st_color_map[st], label=st)
                       for st in unique_sts]
@@ -422,7 +422,7 @@ def _draw_panel_a(
         ax_tree.legend(
             handles=st_handles, ncol=ncols, fontsize=6,
             title="Sequence type (ST)", title_fontsize=6.5,
-            loc="lower left", bbox_to_anchor=(0.0, -0.56),
+            loc="lower left", bbox_to_anchor=(0.22, -0.28),
             frameon=True, framealpha=0.88, edgecolor="none",
             handlelength=1, labelspacing=0.25, columnspacing=0.8,
         )
