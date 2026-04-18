@@ -37,9 +37,7 @@ Input assemblies (folder or samplesheet)
 │  1. SPECIES & QC CHECK                                                    │
 │                                                                           │
 │  Species identification — Mash distance against 13-genome reference       │
-│  sketch; closest-reference-wins (same approach as Kleborate). Shigella   │
-│  isolates are correctly identified because genuine Shigella are closer    │
-│  to Shigella references than to any E. coli reference.                    │
+│  sketch; closest-reference-wins (same approach as Kleborate).             │
 │                                                                           │
 │  Assembly QC filters  (failures logged and excluded from typing)          │
 │  ──────────────────────────────────────────────────────────────────────   │
