@@ -65,7 +65,9 @@ include { AGGREGATE_KRAKEN2                                         } from './mo
 include { AGGREGATE_ASSEMBLY_QC                                     } from './modules/aggregate_assembly_qc'
 include { PLASMID_AMR_MAP                                           } from './modules/plasmid_amr_map'
 include { AGGREGATE_PLASMID_AMR_MAP                                 } from './modules/aggregate_plasmid_amr_map'
-include { PLOT_PLASMID_OVERVIEW                                     } from './modules/plot_plasmid_overview'
+include { PLOT_PLASMID_OVERVIEW as PLOT_PLASMID_OVERVIEW_ECOLI      } from './modules/plot_plasmid_overview'
+include { PLOT_PLASMID_OVERVIEW as PLOT_PLASMID_OVERVIEW_SALMONELLA } from './modules/plot_plasmid_overview'
+include { PLOT_PLASMID_OVERVIEW as PLOT_PLASMID_OVERVIEW_SHIGELLA   } from './modules/plot_plasmid_overview'
 include { AMRFINDER_UPDATE                                          } from './modules/amrfinder_update'
 
 // ── Help ──────────────────────────────────────────────────────────────────────
@@ -653,11 +655,23 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
         PLASMID_AMR_MAP.out.map.map { id, f -> f }.collect()
     )
 
-    PLOT_PLASMID_OVERVIEW(
+    PLOT_PLASMID_OVERVIEW_ECOLI(
         ch_ecoli_tree,
         AGGREGATE_ECOLI.out.results,
         AGGREGATE_PLASMID_AMR_MAP.out.summary,
         'ecoli'
+    )
+    PLOT_PLASMID_OVERVIEW_SALMONELLA(
+        ch_salmonella_tree,
+        AGGREGATE_SALMONELLA.out.results,
+        AGGREGATE_PLASMID_AMR_MAP.out.summary,
+        'salmonella'
+    )
+    PLOT_PLASMID_OVERVIEW_SHIGELLA(
+        ch_shigella_tree,
+        AGGREGATE_SHIGELLA.out.results,
+        AGGREGATE_PLASMID_AMR_MAP.out.summary,
+        'shigella'
     )
 
     // ─────────────────────────────────────────────────────────────────────────

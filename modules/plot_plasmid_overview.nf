@@ -7,7 +7,7 @@
 //   Panel C (bottom-right): plasmid–AMR co-occurrence bubble matrix
 //
 // Replaces: ecoli_fig4_plasmid_replicons, ecoli_plasmid_amr_map_bubble figures.
-// Only run for species where replicon typing is meaningful (E. coli).
+// Run for E. coli, Salmonella, and Shigella.
 
 process PLOT_PLASMID_OVERVIEW {
     label 'low'
@@ -24,7 +24,8 @@ process PLOT_PLASMID_OVERVIEW {
     val(species_label)
 
     output:
-    path("${species_label}_plasmid_overview.{pdf,png}"), emit: figures
+    path("${species_label}_fig4_plasmid_overview.{pdf,png}"), emit: figures
+    path("individual_plasmid_plots/"),                         emit: panels, optional: true
 
     script:
     def tree_arg = (treefile && treefile.name != 'NO_FILE') ? "--tree ${treefile}" : ""

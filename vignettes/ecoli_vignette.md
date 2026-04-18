@@ -124,7 +124,7 @@ light grey = absent); and **acquired AMR gene presence/absence** (red = present,
 light grey = absent). Gene names are labelled along the bottom x-axis. The scale
 bar (top left) represents substitutions per site.
 
-![Phylogeny + AMR](img/ecoli/ecoli_tree_amr.png)
+![Phylogeny + AMR](img/ecoli/ecoli_fig2_tree_amr.png)
 
 ---
 
@@ -142,18 +142,23 @@ is consistent with the commensal, non-clinical source of these isolates.
 
 ---
 
-### Fig 4 — Plasmid replicon types
+### Fig 4 — Plasmid replicon overview
 
-**Figure 4. Prevalence of plasmid replicon types across 98 *Escherichia coli*
-NHP isolates.**
-Horizontal bar chart showing the number of isolates in which each plasmid
-replicon type was detected by PlasmidFinder (Enterobacteriaceae database).
-IncF-group replicons (IncFIB, IncFII variants) dominate, consistent with the
-broad host range of IncF plasmids in commensal *E. coli*. Col-type small
-replicons (Col156, ColRNAI) are also prevalent, reflecting the diverse mobile
-genetic element repertoire across NHP gut isolates.
+**Figure 4. Plasmid replicon overview across 98 *Escherichia coli* NHP isolates.**
+Three-panel figure summarising plasmid replicon diversity.
+**(A)** Horizontal stacked-bar chart showing the prevalence of the top 15
+replicon types, coloured by dominant AMR drug class carried on that replicon
+type. IncF-group replicons (IncFIB, IncFII variants) dominate, consistent with
+the broad host range of IncF plasmids in commensal *E. coli*. Col-type small
+replicons (Col156, ColRNAI) are also prevalent.
+**(B)** Bubble matrix of replicon–AMR drug-class co-occurrence: bubble size
+encodes the number of isolates carrying both the replicon and the drug class;
+colour encodes drug class.
+**(C)** Midpoint-rooted whole-genome SNP phylogeny (IQ-TREE 2) with ST and
+phylogroup annotation strips and a per-isolate plasmid replicon presence/absence
+heatmap (blue = present, white = absent).
 
-![Plasmid replicons](img/ecoli/ecoli_fig4_plasmid_replicons.png)
+![Plasmid replicon overview](img/ecoli/ecoli_fig4_plasmid_overview.png)
 
 ---
 
@@ -199,7 +204,7 @@ percentage: grey = 0 %; cream through orange to dark red = low to high
 prevalence; purple = 100 %. Percentage values are shown inside each cell.
 Intrinsic resistance genes and efflux-associated classes are excluded.
 
-![AMR by ST](img/ecoli/ecoli_fig7_amr_by_st.png)
+![AMR by ST](img/ecoli/ecoli_fig6_amr_by_st.png)
 
 ---
 
@@ -212,7 +217,7 @@ carrying acquired resistance to each drug class. Rows represent phylogroups
 (assigned by Kleborate) sorted by isolate count; columns represent drug classes
 sorted by overall prevalence. Colour and label encoding are identical to Fig 7.
 
-![AMR by phylogroup](img/ecoli/ecoli_fig8_amr_by_phylogroup.png)
+![AMR by phylogroup](img/ecoli/ecoli_fig7_amr_by_group.png)
 
 ---
 

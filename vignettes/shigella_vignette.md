@@ -144,19 +144,24 @@ unique genes including `gyrA_S83L` (fluoroquinolone), `erm(B)` and `mph(A)`
 
 ---
 
-### Fig 4 — Plasmid replicon types
+### Fig 4 — Plasmid replicon overview
 
-**Figure 4. Prevalence of plasmid replicon types across 15 *Shigella* spp. assemblies.**
-Horizontal bar chart showing the number of isolates in which each replicon type was
-detected by PlasmidFinder (Enterobacteriaceae database). IncFII is the dominant
-replicon, detected across *S. boydii*, *S. flexneri*, and *S. dysenteriae*, consistent
-with the pINV large virulence plasmid being IncFII-type in most lineages. Col156 is
-detected exclusively in all three *S. sonnei* isolates and is the characteristic
-small cryptic plasmid of the *S. sonnei* pandemic lineage. IncI1 and IncFII(pSE11)
-co-occur with heavy AMR burden in *S. flexneri* 3a and the MDR *S. sonnei* isolate
-respectively.
+**Figure 4. Plasmid replicon overview across 15 *Shigella* spp. assemblies.**
+Three-panel figure summarising plasmid replicon diversity.
+**(A)** Horizontal stacked-bar chart showing the prevalence of the top replicon
+types, coloured by dominant AMR drug class. IncFII is the dominant replicon,
+detected across *S. boydii*, *S. flexneri*, and *S. dysenteriae*, consistent
+with the pINV large virulence plasmid being IncFII-type in most lineages.
+Col156 is detected exclusively in all three *S. sonnei* isolates and is the
+characteristic small cryptic plasmid of the *S. sonnei* pandemic lineage.
+IncI1 and IncFII(pSE11) co-occur with heavy AMR burden in *S. flexneri* 3a
+and the MDR *S. sonnei* isolate respectively.
+**(B)** Bubble matrix of replicon–AMR drug-class co-occurrence.
+**(C)** Midpoint-rooted whole-genome SNP phylogeny (IQ-TREE 2) with ST
+annotation strip and a per-isolate plasmid replicon presence/absence heatmap
+(blue = present, white = absent).
 
-![Plasmid replicons](img/shigella/shigella_fig4_plasmid_replicons.png)
+![Plasmid replicon overview](img/shigella/shigella_fig4_plasmid_overview.png)
 
 ---
 

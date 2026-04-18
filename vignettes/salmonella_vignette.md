@@ -228,7 +228,7 @@ substitutions per site. Clustering of closely related isolates from the same
 collection period or clinical source reflects the epidemiological structure
 of NTS disease in The Gambia.
 
-![Phylogeny + AMR](img/salmonella/salmonella_tree_amr.png)
+![Phylogeny + AMR](img/salmonella/salmonella_fig2_tree_amr.png)
 
 ---
 
@@ -247,20 +247,25 @@ Gambian NTS, including genes conferring resistance to aminoglycosides,
 
 ---
 
-### Fig 4 — Plasmid replicon types
+### Fig 4 — Plasmid replicon overview
 
-**Figure 4. Prevalence of plasmid replicon types across 99 clinical *Salmonella enterica*
+**Figure 4. Plasmid replicon overview across 99 clinical *Salmonella enterica*
 isolates from The Gambia.**
-Horizontal bar chart showing the number of isolates in which each plasmid
-replicon type was detected by PlasmidFinder (Enterobacteriaceae database).
-IncFII(S) and IncFIB(S)—Salmonella-associated IncF plasmids—are the most
-prevalent replicons, detected in approximately 54% and 49% of isolates respectively,
-consistent with the widespread distribution of IncF plasmids in Enterobacteriaceae.
-Non-IncF replicons including IncI1, IncN, and IncX1 are present at lower frequency.
-The detection of IncL/M(pOXA-48) in a small number of isolates is notable given its
-association with OXA-48-type carbapenemase-encoding plasmids.
+Three-panel figure summarising plasmid replicon diversity.
+**(A)** Horizontal stacked-bar chart showing the prevalence of the top 15
+replicon types, coloured by dominant AMR drug class carried on that replicon
+type. IncFII(S) and IncFIB(S)—Salmonella-associated IncF plasmids—are the most
+prevalent replicons, detected in approximately 54% and 49% of isolates
+respectively. Non-IncF replicons including IncI1, IncN, and IncX1 are present
+at lower frequency. The detection of IncL/M(pOXA-48) in a small number of
+isolates is notable given its association with OXA-48-type
+carbapenemase-encoding plasmids.
+**(B)** Bubble matrix of replicon–AMR drug-class co-occurrence.
+**(C)** Midpoint-rooted whole-genome SNP phylogeny (IQ-TREE 2) with ST
+annotation strip and a per-isolate plasmid replicon presence/absence heatmap
+(blue = present, white = absent).
 
-![Plasmid replicons](img/salmonella/salmonella_fig4_plasmid_replicons.png)
+![Plasmid replicon overview](img/salmonella/salmonella_fig4_plasmid_overview.png)
 
 ---
 
@@ -290,7 +295,7 @@ percentage: grey = 0 %; cream through orange to dark red = low to high
 prevalence; purple = 100 %. Percentage values are shown inside each cell.
 Intrinsic resistance genes are excluded.
 
-![AMR by ST](img/salmonella/salmonella_fig7_amr_by_st.png)
+![AMR by ST](img/salmonella/salmonella_fig6_amr_by_st.png)
 
 ---
 
@@ -303,7 +308,7 @@ serovar carrying acquired resistance to each drug class. Rows represent the
 most common serovars sorted by isolate count; columns represent drug classes
 sorted by overall prevalence. Colour and label encoding are identical to Fig 6.
 
-![AMR by serovar](img/salmonella/salmonella_fig8_amr_by_serovar.png)
+![AMR by serovar](img/salmonella/salmonella_fig7_amr_by_group.png)
 
 ---
 
