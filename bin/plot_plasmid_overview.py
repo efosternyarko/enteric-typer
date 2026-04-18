@@ -140,6 +140,43 @@ _ST_PALETTE = [
     "#ffca3a","#6a994e",
 ]
 
+# ── Replicon-family palette (simplified layout) ───────────────────────────────
+# Used when same-contig AMR co-occurrence is too sparse for the full drug-class
+# breakdown (typical of fragmented short-read assemblies).
+FAMILY_COLOR = {
+    "IncF":   "#4e79a7",
+    "IncI":   "#f28e2b",
+    "IncN":   "#e15759",
+    "IncA/C": "#76b7b2",
+    "IncH":   "#59a14f",
+    "IncL/M": "#edc948",
+    "IncX":   "#b07aa1",
+    "IncP":   "#ff9da7",
+    "IncQ":   "#9c755f",
+    "Col":    "#bab0ac",
+    "Other":  "#d3d3d3",
+}
+
+# Threshold: if < this fraction of plasmid-carrying isolates have at least one
+# AMR gene on the same contig as a replicon, use the simplified layout.
+_SIMPLE_LAYOUT_THRESHOLD = 0.10
+
+
+def _replicon_family(rep: str) -> str:
+    """Return broad Inc/Col family for colour grouping."""
+    r = rep.split("(")[0].rstrip("0123456789_")
+    if r.startswith("IncF"):  return "IncF"
+    if r.startswith("IncI"):  return "IncI"
+    if r.startswith("IncN"):  return "IncN"
+    if r.startswith("IncA") or r.startswith("IncC"):  return "IncA/C"
+    if r.startswith("IncH"):  return "IncH"
+    if r.startswith("IncL") or r.startswith("IncM"):  return "IncL/M"
+    if r.startswith("IncX"):  return "IncX"
+    if r.startswith("IncP"):  return "IncP"
+    if r.startswith("IncQ"):  return "IncQ"
+    if r.startswith("Col"):   return "Col"
+    return "Other"
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -224,6 +261,7 @@ def _build_plasmid_data(
     df_map: pd.DataFrame,
     tips: list[str],
     top_n: int,
+    sample_acq_classes: Optional[dict] = None,
 ):
     """
     Returns
@@ -232,6 +270,12 @@ def _build_plasmid_data(
     rep_dom_color: dict       — replicon → dominant-class hex colour
     mat          : ndarray    — (n_tips, n_reps) binary presence
     pair_dom     : dict       — (norm_sample_id, replicon) → dominant class
+
+    sample_acq_classes (optional): dict mapping normalised sample IDs to their
+    acquired drug class sets (from the metadata TSV, AMRrules-filtered).  When
+    provided, each (sample, replicon) pair is supplemented with the sample's
+    acquired classes so that fragmented short-read assemblies — where the
+    replicon and AMR genes land on different contigs — are handled correctly.
     """
     tip_norm = {t: _norm(t) for t in tips}
     norm_set = set(tip_norm.values())
@@ -558,6 +602,45 @@ def _draw_panel_c(
     ax.spines["left"].set_visible(True)
 
 
+# ── Panel A (simplified): plain replicon prevalence coloured by Inc family ────
+
+def _draw_panel_simple_bars(
+    ax: plt.Axes,
+    top_reps: list[str],
+    mat: np.ndarray,
+    n_isolates: int,
+) -> None:
+    """
+    Simple horizontal bar chart of replicon prevalence, coloured by Inc/Col
+    family.  Used for short-read assemblies where same-contig AMR attribution
+    is not meaningful.
+    """
+    y    = np.arange(len(top_reps))
+    pcts = [100 * int(mat[:, j].sum()) / n_isolates for j in range(len(top_reps))]
+    fams = [_replicon_family(r) for r in top_reps]
+    cols = [FAMILY_COLOR.get(f, FAMILY_COLOR["Other"]) for f in fams]
+
+    ax.barh(y, pcts, color=cols, height=0.76, edgecolor="white", linewidth=0.25)
+    ax.set_yticks(y)
+    ax.set_yticklabels(top_reps, fontsize=7.5)
+    ax.invert_yaxis()
+    ax.set_xlabel("Prevalence (% of isolates)", fontsize=8)
+    ax.set_title("Replicon prevalence by Inc/Col family", fontweight="bold")
+    ax.set_xlim(0, 108)
+    ax.xaxis.set_major_locator(plt.MultipleLocator(20))
+
+    # Legend — unique families in the order they appear
+    seen = list(dict.fromkeys(fams))
+    handles = [mpatches.Patch(facecolor=FAMILY_COLOR.get(f, FAMILY_COLOR["Other"]),
+                               label=f) for f in seen]
+    ncol = max(1, math.ceil(len(handles) / 4))
+    ax.legend(handles=handles, fontsize=6.5, ncol=ncol,
+              title="Replicon family", title_fontsize=7,
+              loc="upper left", bbox_to_anchor=(0.0, -0.18),
+              frameon=True, framealpha=0.88, edgecolor="none",
+              handlelength=1, columnspacing=0.8)
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def plot_plasmid_overview(
@@ -601,81 +684,139 @@ def plot_plasmid_overview(
         return
     print(f"  Top {len(top_reps)} replicons selected", file=sys.stderr)
 
-    # ── Figure layout ─────────────────────────────────────────────────────────
+    # ── Auto-detect layout ────────────────────────────────────────────────────
+    # In fragmented short-read assemblies the replicon sequence and AMR gene
+    # cassettes typically land on *different* contigs, so same-contig matching
+    # yields almost no drug-class signal.  If fewer than 10 % of plasmid-
+    # carrying isolates have any AMR on the same contig as a replicon, use the
+    # simplified 2-panel layout (replicon prevalence bars + tree heatmap)
+    # instead of the full 3-panel layout (stacked-drug-class bars + bubble
+    # matrix + tree heatmap).
+    n_rep_samples  = len({sid for sid, _ in pair_dom})
+    n_with_amr     = len({sid for (sid, _), dom in pair_dom.items()
+                          if dom != "No AMR"})
+    frac_with_amr  = n_with_amr / max(1, n_rep_samples)
+    use_simple     = frac_with_amr < _SIMPLE_LAYOUT_THRESHOLD
+    print(f"  Same-contig AMR fraction: {frac_with_amr:.2f} "
+          f"({'simple' if use_simple else 'full'} layout)",
+          file=sys.stderr)
+
+    # ── Figure dimensions ─────────────────────────────────────────────────────
     n           = len(tips)
     row_h       = max(0.05, min(0.16, 9.0 / n))
-    panel_a_h   = max(6.0,  n * row_h + 2.0)
-    panel_bot_h = max(5.0,  top_n * 0.40 + 2.5)
-    fig_h       = panel_a_h + panel_bot_h + 1.5   # padding
-    fig_w       = 22.0   # wider to give right-side breathing room
+    panel_tree_h = max(6.0,  n * row_h + 2.0)
+    panel_bars_h = max(5.0,  top_n * 0.40 + 2.5)
+    fig_w        = 22.0
 
-    fig = plt.figure(figsize=(fig_w, fig_h))
-    # Row 0 (top)  = Panels A + B  (stacked bars | bubble matrix)
-    # Row 1 (bottom) = Panel C (tree | ST | PG | plasmid heatmap, full width)
-    outer = gridspec.GridSpec(
-        2, 1, figure=fig,
-        height_ratios=[panel_bot_h, panel_a_h],
-        hspace=0.35,
-    )
-    top_gs = gridspec.GridSpecFromSubplotSpec(
-        1, 2,
-        subplot_spec=outer[0],
-        wspace=0.35,
-        width_ratios=[0.42, 0.58],
-    )
-    ax_a = fig.add_subplot(top_gs[0])
-    ax_b = fig.add_subplot(top_gs[1])
+    # ── Draw ──────────────────────────────────────────────────────────────────
+    if use_simple:
+        # ── Simplified layout: 2 rows (bars top, tree+heatmap bottom) ─────────
+        fig_h = panel_tree_h + panel_bars_h + 1.5
+        fig   = plt.figure(figsize=(fig_w, fig_h))
+        outer = gridspec.GridSpec(
+            2, 1, figure=fig,
+            height_ratios=[panel_bars_h, panel_tree_h],
+            hspace=0.35,
+        )
+        ax_a = fig.add_subplot(outer[0])
+        _draw_panel_simple_bars(ax_a, top_reps, mat, n_isolates)
 
-    # ── Panel A (top-left): stacked bars ─────────────────────────────────────
-    _draw_panel_b(ax_a, df_map, top_reps, n_isolates, pair_dom)
+        if tree_root is not None and pos is not None:
+            ax_tree = _draw_panel_a(fig, outer[1], tree_root, pos, tips, meta,
+                                    top_reps, mat)
+        else:
+            ax_tree = fig.add_subplot(outer[1])
+            ax_tree.text(0.5, 0.5, "No tree available", ha="center",
+                         va="center", transform=ax_tree.transAxes,
+                         color="grey", fontsize=12)
+            ax_tree.axis("off")
 
-    # ── Panel B (top-right): bubble matrix ───────────────────────────────────
-    _draw_panel_c(ax_b, df_map, top_reps, n_isolates)
+        for ax, lbl in [(ax_a, "A"), (ax_tree, "B")]:
+            ax.text(-0.04, 1.03, lbl, transform=ax.transAxes,
+                    fontsize=14, fontweight="bold", va="bottom", ha="left")
 
-    # ── Panel C (bottom, full width): tree + plasmid heatmap ─────────────────
-    if tree_root is not None and pos is not None:
-        ax_tree = _draw_panel_a(fig, outer[1], tree_root, pos, tips, meta,
-                                top_reps, mat)
-    else:
-        ax_tree = fig.add_subplot(outer[1])
-        ax_tree.text(0.5, 0.5, "No tree available", ha="center", va="center",
-                     transform=ax_tree.transAxes, color="grey", fontsize=12)
-        ax_tree.axis("off")
+        _save(fig, outdir, f"{prefix}_fig4_plasmid_overview")
 
-    # ── Panel labels — top-left corner of each panel's first axis ───────────
-    for ax, lbl in [(ax_a, "A"), (ax_b, "B"), (ax_tree, "C")]:
-        ax.text(-0.04, 1.03, lbl, transform=ax.transAxes,
-                fontsize=14, fontweight="bold", va="bottom", ha="left")
+        # Individual panels
+        indiv_dir = outdir / "individual_plasmid_plots"
+        indiv_dir.mkdir(parents=True, exist_ok=True)
 
-    _save(fig, outdir, f"{prefix}_fig4_plasmid_overview")
-
-    # ── Individual panel figures ──────────────────────────────────────────────
-    indiv_dir = outdir / "individual_plasmid_plots"
-    indiv_dir.mkdir(parents=True, exist_ok=True)
-
-    # Panel A standalone: stacked bars
-    fig_a, ax_ia = plt.subplots(figsize=(8, max(4.0, top_n * 0.40 + 2.0)))
-    _draw_panel_b(ax_ia, df_map, top_reps, n_isolates, pair_dom)
-    ax_ia.text(-0.04, 1.03, "A", transform=ax_ia.transAxes,
-               fontsize=14, fontweight="bold", va="bottom", ha="left")
-    _save(fig_a, indiv_dir, f"{prefix}_fig4_panel_a_replicon_bars")
-
-    # Panel B standalone: bubble matrix
-    fig_b, ax_ib = plt.subplots(figsize=(9, max(4.0, top_n * 0.40 + 2.0)))
-    _draw_panel_c(ax_ib, df_map, top_reps, n_isolates)
-    ax_ib.text(-0.04, 1.03, "B", transform=ax_ib.transAxes,
-               fontsize=14, fontweight="bold", va="bottom", ha="left")
-    _save(fig_b, indiv_dir, f"{prefix}_fig4_panel_b_bubble_matrix")
-
-    # Panel C standalone: tree + plasmid heatmap
-    if tree_root is not None and pos is not None:
-        fig_c = plt.figure(figsize=(fig_w, panel_a_h + 1.5))
-        gs_c  = gridspec.GridSpec(1, 1, figure=fig_c)
-        ax_ic = _draw_panel_a(fig_c, gs_c[0], tree_root, pos, tips, meta,
-                               top_reps, mat)
-        ax_ic.text(-0.04, 1.03, "C", transform=ax_ic.transAxes,
+        fig_a, ax_ia = plt.subplots(figsize=(8, max(4.0, top_n * 0.40 + 2.0)))
+        _draw_panel_simple_bars(ax_ia, top_reps, mat, n_isolates)
+        ax_ia.text(-0.04, 1.03, "A", transform=ax_ia.transAxes,
                    fontsize=14, fontweight="bold", va="bottom", ha="left")
-        _save(fig_c, indiv_dir, f"{prefix}_fig4_panel_c_tree_heatmap")
+        _save(fig_a, indiv_dir, f"{prefix}_fig4_panel_a_replicon_bars")
+
+        if tree_root is not None and pos is not None:
+            fig_b = plt.figure(figsize=(fig_w, panel_tree_h + 1.5))
+            gs_b  = gridspec.GridSpec(1, 1, figure=fig_b)
+            ax_ib = _draw_panel_a(fig_b, gs_b[0], tree_root, pos, tips, meta,
+                                   top_reps, mat)
+            ax_ib.text(-0.04, 1.03, "B", transform=ax_ib.transAxes,
+                       fontsize=14, fontweight="bold", va="bottom", ha="left")
+            _save(fig_b, indiv_dir, f"{prefix}_fig4_panel_b_tree_heatmap")
+
+    else:
+        # ── Full layout: 3 panels (stacked-drug bars | bubble matrix | tree) ──
+        fig_h = panel_tree_h + panel_bars_h + 1.5
+        fig   = plt.figure(figsize=(fig_w, fig_h))
+        outer = gridspec.GridSpec(
+            2, 1, figure=fig,
+            height_ratios=[panel_bars_h, panel_tree_h],
+            hspace=0.35,
+        )
+        top_gs = gridspec.GridSpecFromSubplotSpec(
+            1, 2,
+            subplot_spec=outer[0],
+            wspace=0.35,
+            width_ratios=[0.42, 0.58],
+        )
+        ax_a = fig.add_subplot(top_gs[0])
+        ax_b = fig.add_subplot(top_gs[1])
+
+        _draw_panel_b(ax_a, df_map, top_reps, n_isolates, pair_dom)
+        _draw_panel_c(ax_b, df_map, top_reps, n_isolates)
+
+        if tree_root is not None and pos is not None:
+            ax_tree = _draw_panel_a(fig, outer[1], tree_root, pos, tips, meta,
+                                    top_reps, mat)
+        else:
+            ax_tree = fig.add_subplot(outer[1])
+            ax_tree.text(0.5, 0.5, "No tree available", ha="center",
+                         va="center", transform=ax_tree.transAxes,
+                         color="grey", fontsize=12)
+            ax_tree.axis("off")
+
+        for ax, lbl in [(ax_a, "A"), (ax_b, "B"), (ax_tree, "C")]:
+            ax.text(-0.04, 1.03, lbl, transform=ax.transAxes,
+                    fontsize=14, fontweight="bold", va="bottom", ha="left")
+
+        _save(fig, outdir, f"{prefix}_fig4_plasmid_overview")
+
+        # Individual panels
+        indiv_dir = outdir / "individual_plasmid_plots"
+        indiv_dir.mkdir(parents=True, exist_ok=True)
+
+        fig_a, ax_ia = plt.subplots(figsize=(8, max(4.0, top_n * 0.40 + 2.0)))
+        _draw_panel_b(ax_ia, df_map, top_reps, n_isolates, pair_dom)
+        ax_ia.text(-0.04, 1.03, "A", transform=ax_ia.transAxes,
+                   fontsize=14, fontweight="bold", va="bottom", ha="left")
+        _save(fig_a, indiv_dir, f"{prefix}_fig4_panel_a_replicon_bars")
+
+        fig_b, ax_ib = plt.subplots(figsize=(9, max(4.0, top_n * 0.40 + 2.0)))
+        _draw_panel_c(ax_ib, df_map, top_reps, n_isolates)
+        ax_ib.text(-0.04, 1.03, "B", transform=ax_ib.transAxes,
+                   fontsize=14, fontweight="bold", va="bottom", ha="left")
+        _save(fig_b, indiv_dir, f"{prefix}_fig4_panel_b_bubble_matrix")
+
+        if tree_root is not None and pos is not None:
+            fig_c = plt.figure(figsize=(fig_w, panel_tree_h + 1.5))
+            gs_c  = gridspec.GridSpec(1, 1, figure=fig_c)
+            ax_ic = _draw_panel_a(fig_c, gs_c[0], tree_root, pos, tips, meta,
+                                   top_reps, mat)
+            ax_ic.text(-0.04, 1.03, "C", transform=ax_ic.transAxes,
+                       fontsize=14, fontweight="bold", va="bottom", ha="left")
+            _save(fig_c, indiv_dir, f"{prefix}_fig4_panel_c_tree_heatmap")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────

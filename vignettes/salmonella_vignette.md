@@ -251,18 +251,19 @@ Gambian NTS, including genes conferring resistance to aminoglycosides,
 
 **Figure 4. Plasmid replicon overview across 99 clinical *Salmonella enterica*
 isolates from The Gambia.**
-Three-panel figure summarising plasmid replicon diversity.
-**(A)** Horizontal stacked-bar chart showing the prevalence of the top 15
-replicon types, coloured by dominant AMR drug class carried on that replicon
-type. IncFII(S) and IncFIB(S)—Salmonella-associated IncF plasmids—are the most
-prevalent replicons, detected in approximately 54% and 49% of isolates
-respectively. Non-IncF replicons including IncI1, IncN, and IncX1 are present
-at lower frequency. The detection of IncL/M(pOXA-48) in a small number of
-isolates is notable given its association with OXA-48-type
-carbapenemase-encoding plasmids.
-**(B)** Bubble matrix of replicon–AMR drug-class co-occurrence.
-**(C)** Midpoint-rooted whole-genome SNP phylogeny (IQ-TREE 2) with ST
-annotation strip and a per-isolate plasmid replicon presence/absence heatmap
+Two-panel figure summarising plasmid replicon diversity.
+**(A)** Horizontal bar chart of replicon prevalence (% of isolates), with bars
+coloured by Inc/Col replicon family. IncFII(S) and IncFIB(S)—Salmonella-associated
+IncF plasmids—are the most prevalent replicons, detected in approximately 54% and
+49% of isolates respectively. Non-IncF replicons including IncI1, IncN, and IncX1
+are present at lower frequency. The detection of IncL/M(pOXA-48) in a small number
+of isolates is notable given its association with OXA-48-type carbapenemase-encoding
+plasmids. Drug-class breakdown by AMR co-occurrence is not shown: these are
+fragmented short-read assemblies in which replicon sequences and AMR gene cassettes
+routinely land on different contigs of the same plasmid, making same-contig
+attribution unreliable.
+**(B)** Midpoint-rooted whole-genome SNP phylogeny (IQ-TREE 2) with ST annotation
+strip and a per-isolate plasmid replicon presence/absence heatmap
 (blue = present, white = absent).
 
 ![Plasmid replicon overview](img/salmonella/salmonella_fig4_plasmid_overview.png)

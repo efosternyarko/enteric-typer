@@ -145,18 +145,17 @@ is consistent with the commensal, non-clinical source of these isolates.
 ### Fig 4 — Plasmid replicon overview
 
 **Figure 4. Plasmid replicon overview across 98 *Escherichia coli* NHP isolates.**
-Three-panel figure summarising plasmid replicon diversity.
-**(A)** Horizontal stacked-bar chart showing the prevalence of the top 15
-replicon types, coloured by dominant AMR drug class carried on that replicon
-type. IncF-group replicons (IncFIB, IncFII variants) dominate, consistent with
-the broad host range of IncF plasmids in commensal *E. coli*. Col-type small
-replicons (Col156, ColRNAI) are also prevalent.
-**(B)** Bubble matrix of replicon–AMR drug-class co-occurrence: bubble size
-encodes the number of isolates carrying both the replicon and the drug class;
-colour encodes drug class.
-**(C)** Midpoint-rooted whole-genome SNP phylogeny (IQ-TREE 2) with ST and
-phylogroup annotation strips and a per-isolate plasmid replicon presence/absence
-heatmap (blue = present, white = absent).
+Two-panel figure summarising plasmid replicon diversity.
+**(A)** Horizontal bar chart of replicon prevalence (% of isolates), with bars
+coloured by Inc/Col replicon family. IncF-group replicons (IncFIB, IncFII variants)
+dominate, consistent with the broad host range of IncF plasmids in commensal
+*E. coli*. Col-type small replicons (Col156, ColRNAI) are also prevalent. Drug-class
+breakdown by AMR co-occurrence is not shown: these are fragmented short-read
+assemblies in which replicon sequences and AMR gene cassettes routinely land on
+different contigs of the same plasmid, making same-contig attribution unreliable.
+**(B)** Midpoint-rooted whole-genome SNP phylogeny (IQ-TREE 2) with ST and
+Clermont phylogroup annotation strips and a per-isolate plasmid replicon
+presence/absence heatmap (blue = present, white = absent).
 
 ![Plasmid replicon overview](img/ecoli/ecoli_fig4_plasmid_overview.png)
 

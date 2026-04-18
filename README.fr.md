@@ -2,7 +2,7 @@
 
 # enteric-typer
 
-Un pipeline de génotypage à portail d'espèces pour les pathogènes entériques. À partir d'un dossier d'assemblages génomiques, le pipeline identifie l'espèce de chaque échantillon et déploie les outils de typage appropriés, génère une phylogénie SNP à l'échelle du génome entier et produit des figures récapitulatives prêtes à la publication.
+Un processus de génotypage basé sur l'identification des espèces pour les agents pathogènes entériques. À partir d'un dossier contenant des assemblages de génomes, ce pipeline identifie l'espèce de chaque échantillon et utilise les outils de typage spécifiques à cette espèce, génère une phylogénie SNP à l'échelle du génome entier et produit des figures récapitulatives prêtes à être publiées.
 
 ## Espèces prises en charge
 
@@ -11,7 +11,7 @@ Un pipeline de génotypage à portail d'espèces pour les pathogènes entérique
 | *Escherichia coli* | MLST (Achtman), AMRFinder, ECTyper (sérotype), EzClermont (phylogroupe Clermont), Kleborate (pathotype), PlasmidFinder, Kaptive (locus K) |
 | *Salmonella enterica* | MLST, AMRFinder, SISTR (sérovar), PlasmidFinder |
 | *Shigella* spp. | MLST (Achtman), AMRFinder, ShigEiFinder (sérotype/espèce), Mykrobe (génotypage *S. sonnei*), PlasmidFinder, criblage pINV, criblage éléments IS |
-| Autre / non classifié | Identification de l'espèce uniquement (enregistré et ignoré) |
+| Autre / non classé | Identification de l'espèce uniquement (enregistré et ignoré) |
 
 > **Kleborate :** effectue une détection complète du pathotype sur toutes les plateformes. Sur macOS Apple Silicon (ARM64) sans Rosetta 2, il passe automatiquement en mode MLST uniquement — tous les autres outils fonctionnent à pleine capacité quelle que soit la plateforme (Linux, macOS Intel/ARM64, HPC).
 
@@ -28,9 +28,7 @@ Assemblages d'entrée (dossier ou feuille d'échantillons)
 │                                                                           │
 │  Identification de l'espèce — distance Mash par rapport à une esquisse   │
 │  de référence à 13 génomes ; la référence la plus proche l'emporte        │
-│  (même approche que Kleborate). Les isolats de Shigella sont              │
-│  correctement identifiés car ils sont plus proches des références         │
-│  Shigella que de toute référence E. coli.                                 │
+│  (même approche que Kleborate).                                           │
 │                                                                           │
 │  Filtres de contrôle qualité des assemblages (échecs enregistrés et       │
 │  exclus du typage)                                                        │
@@ -64,7 +62,7 @@ E. coli  Salmonella  Shigella   (autres espèces enregistrées et ignorées)
         │
         ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  3. PHYLOGÉNÉTIQUE  (par espèce, ≥ 3 échantillons ; ignorer avec         │
+│  3. PHYLOGÉNÉTIQUE  (par espèce, ≥ 3 échantillons ; à désactiver via     │
 │                    --skip_local_phylo)                                   │
 │  SKA2 build (k=31) → alignement SNP génome entier + matrice de           │
 │  distances SNP → arbre ML IQ-TREE (modèle GTR+G ;                        │
@@ -97,7 +95,8 @@ E. coli  Salmonella  Shigella   (autres espèces enregistrées et ignorées)
 │           B — Barres de sérotype / paysage éléments IS (Shigella)        │
 │           C — Prévalence par classe d'antibiotiques                       │
 │           D — Charge de multirésistance par isolat                        │
-│  Fig 2  Arbre phylogénétique + bandes ST/phylogroupe + carte thermique AMR│
+│  Fig 2  Arbre phylogénétique + bandes ST/phylogroupe + carte thermique de  │
+│         la résistance aux antimicrobiens (AMR)                            │
 │  Fig 3  Principaux gènes AMR acquis (gènes intrinsèques exclus)           │
 │  Fig 4  Types de réplicons plasmidiques                                   │
 │  Fig 5  Gènes de virulence / pathotype                                    │
@@ -113,16 +112,16 @@ E. coli  Salmonella  Shigella   (autres espèces enregistrées et ignorées)
 │  Contrôle qualité des assemblages (toutes espèces)                        │
 │  ─────────────────────────────────────────────────────────────────────   │
 │  Métriques d'assemblage  Figure à 8 panneaux par espèce (PDF + PNG) :    │
-│           A — Histogramme longueur de génome   B — Boîte longueur génome  │
-│           C — Histogramme N50                  D — Boîte N50              │
-│           E — Histogramme nombre de contigs    F — Boîte nombre de contigs│
-│           G — Histogramme GC%                  H — Boîte GC%              │
+│           A — Histogramme longueur de génome   B — Diagramme en boîte longueur génome  │
+│           C — Histogramme N50                  D — Diagramme en boîte N50              │
+│           E — Histogramme nombre de contigs    F — Diagramme en boîte nombre de contigs│
+│           G — Histogramme GC%                  H — Diagramme en boîte GC%              │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
 > **Typage du locus K d'*E. coli* (Kaptive) :** le typage du locus K utilise deux bases de données curées exécutées séquentiellement. Les assemblages sont d'abord typés sur la **base de données G2/G3** (`EC-K-typing_group2and3_v3.0.0.gbk` ; [Gladstone et al. 2026](https://www.nature.com/articles/s41564-026-02283-w)). Les échantillons restant non typables sont ensuite retypés sur la **base de données G1/G4** (`EC-K-typing_group1and4_v1.2.gbk` ; [Foster-Nyarko et al.](https://github.com/efosternyarko/EC-K-typing-G1G4)). Les loci G2/G3 et G1/G4 sont mutuellement exclusifs chez *E. coli*, donc le typage séquentiel garantit que chaque échantillon est assigné au bon groupe sans double comptage.
 
-> **Phylogénétique (SKA2 + IQ-TREE) :** les phylogénies SNP génome entier sont construites avec [SKA2](https://github.com/bacpop/ska.rust) (alignement par k-mers divisés, k=31), qui aligne les assemblages sans génome de référence et produit un alignement SNP à l'échelle du génome ainsi qu'une matrice de distances SNP par paires. L'alignement est ensuite transmis à IQ-TREE 2 pour l'inférence d'arbre par maximum de vraisemblance (par défaut : GTR+G ; utiliser `--iqtree_model MFP` pour activer ModelFinder Plus). La phylogénétique s'exécute par espèce lorsque ≥ 3 échantillons sont présents ; ignorer avec `--skip_local_phylo` pour des exécutions plus rapides.
+> **Phylogénétique (SKA2 + IQ-TREE) :** les phylogénies SNP génome entier sont construites avec [SKA2](https://github.com/bacpop/ska.rust) (alignement par k-mers divisés, k=31), qui aligne les assemblages sans génome de référence et produit un alignement SNP à l'échelle du génome ainsi qu'une matrice de distances SNP par paires. L'alignement est ensuite transmis à IQ-TREE 2 pour l'inférence d'arbre par maximum de vraisemblance (par défaut : GTR+G ; utiliser `--iqtree_model MFP` pour activer ModelFinder Plus). La phylogénétique s'exécute par espèce lorsque ≥ 3 échantillons sont présents ; désactivable via `--skip_local_phylo` pour des exécutions plus rapides.
 
 ---
 
@@ -139,7 +138,7 @@ cd enteric-typer
 
 ### Étape 2 — Installer Java
 
-Nextflow nécessite Java 17 ou une version ultérieure (Java 21 recommandé).
+Nextflow nécessite Java 17 ou une version plus récente (Java 21 recommandé).
 
 **macOS**
 ```bash
@@ -260,11 +259,23 @@ Redémarrer PowerShell.
 
 ### Étape 5 — Installer ncbi-datasets-cli et mash
 
-Ces deux outils sont requis par `build_references.sh` pour télécharger les génomes de référence et construire l'esquisse d'espèces :
+Ces deux outils sont requis par `build_references.sh` pour télécharger les génomes de référence et construire l'esquisse d'espèces.
+
+> **Bonne pratique :** installer ces outils dans un environnement dédié plutôt que dans `base`.
+> Cela évite les conflits de versions et de dépendances avec d'autres logiciels déjà installés.
 
 ```bash
-mamba install -c conda-forge ncbi-datasets-cli
-mamba install -c bioconda mash
+# Créer un environnement dédié aux utilitaires de téléchargement (à exécuter une seule fois)
+mamba create -n enteric-tools -c conda-forge -c bioconda ncbi-datasets-cli mash -y
+```
+
+L'environnement `enteric-tools` n'est nécessaire que le temps d'exécuter `build_references.sh` (étape 6).
+Après cela, le désactiver — le pipeline gère ensuite ses propres environnements automatiquement :
+
+```bash
+conda activate enteric-tools
+bash assets/build_references.sh
+conda deactivate
 ```
 
 ---
@@ -298,7 +309,7 @@ Génomes de référence inclus :
 | *S. dysenteriae* | Sd197 | GCF_000012005.1 |
 | *K. pneumoniae* | HS11286 | GCF_000240185.1 |
 
-> L'identification des espèces utilise la méthode **la référence la plus proche l'emporte** (même approche que Kleborate) : le groupe d'espèces ayant la plus faible distance Mash par rapport à toute référence dans l'esquisse est assigné. Les isolats authentiques de *Shigella* sont correctement identifiés car leur référence la plus proche est toujours un génome de *Shigella* (distance Mash < 0,012), tandis que les isolats *E. coli* du phylogroupe B2 — phylogénétiquement proches de *Shigella* mais n'en étant pas — obtiennent des distances plus faibles aux références *E. coli* (~0,007) qu'à toute référence *Shigella* (≥ 0,014) et sont correctement appelés *E. coli*.
+> L'identification des espèces repose sur le principe du « référence la plus proche » (même approche que Kleborate) : le groupe d'espèces présentant la distance Mash la plus faible par rapport à n'importe quelle référence figurant dans le schéma est attribué. Les isolats authentiques de *Shigella* sont correctement identifiés car leur référence la plus proche est toujours un génome de *Shigella* (distance Mash < 0,012), tandis que les isolats *E. coli* du phylogroupe B2 — phylogénétiquement proches de *Shigella* mais n'en étant pas — obtiennent des distances plus faibles aux références *E. coli* (~0,007) qu'à toute référence *Shigella* (≥ 0,014) et sont correctement classés comme *E. coli*.
 
 ---
 
@@ -492,7 +503,7 @@ results/
 │       — bande de couleur ST
 │       — bande de couleur phylogroupe Clermont (E. coli uniquement)
 │       — carte thermique binaire gènes de virulence
-│       — carte thermique gènes AMR regroupés par classe d'antibiotiques
+│       — carte thermique gènes de résistance (AMR) regroupés par classe d'antibiotiques
 │
 ├── {species}_fig3_amr_genes.{pdf,png}      ← Fréquences des gènes AMR acquis
 ├── {species}_fig4_plasmid_replicons.{pdf,png}
@@ -520,10 +531,10 @@ results/
 │
 ├── {species}_assembly_metrics.{pdf,png}
 │     Figure CQ assemblage à 8 panneaux (une par espèce détectée) :
-│       A  Histogramme longueur de génome    B  Boîte longueur de génome
-│       C  Histogramme N50                   D  Boîte N50
-│       E  Histogramme nombre de contigs     F  Boîte nombre de contigs
-│       G  Histogramme GC%                   H  Boîte GC%
+│       A  Histogramme longueur de génome    B  Diagramme en boîte longueur de génome
+│       C  Histogramme N50                   D  Diagramme en boîte N50
+│       E  Histogramme nombre de contigs     F  Diagramme en boîte nombre de contigs
+│       G  Histogramme GC%                   H  Diagramme en boîte GC%
 │
 └── {species}_assembly_metrics_summary.tsv
       Statistiques d'assemblage par échantillon agrégées (genome_length, num_contigs,
@@ -561,7 +572,7 @@ Les noms complets et les notes cliniques sont donnés ci-dessous.
 
 ## Nettoyage après une exécution
 
-Tous les résultats finaux sont écrits dans `--outdir` (par défaut : `results/`). Une fois les résultats vérifiés, les fichiers temporaires de Nextflow peuvent être supprimés pour libérer de l'espace disque :
+Tous les résultats définitifs sont écrits dans `--outdir` (par défaut : `results/`). Une fois les résultats vérifiés, les fichiers temporaires de Nextflow peuvent être supprimés pour libérer de l'espace disque :
 
 ```bash
 rm -rf work/ .nextflow/ .nextflow.log*
