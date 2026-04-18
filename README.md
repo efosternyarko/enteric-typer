@@ -293,21 +293,15 @@ Both are required by `build_references.sh` to download reference genomes and bui
 ```bash
 # Create a small environment for the download utilities (run once)
 mamba create -n enteric-tools -c conda-forge -c bioconda ncbi-datasets-cli mash -y
-conda activate enteric-tools
 ```
 
-If you prefer to install directly into the currently active environment (e.g. during a quick test), you can use:
-
-```bash
-mamba install -c conda-forge ncbi-datasets-cli
-mamba install -c bioconda mash
-```
-
-Remember to activate the `enteric-tools` environment before running `build_references.sh`:
+`enteric-tools` only needs to be active when running `build_references.sh` (Step 6).
+After that, deactivate it — the pipeline manages its own environments automatically:
 
 ```bash
 conda activate enteric-tools
 bash assets/build_references.sh
+conda deactivate
 ```
 
 ---
