@@ -1,0 +1,2205 @@
+---
+title: "enteric-typer — Wiki"
+subtitle: "Pipeline documentation for review"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-title: "Contents"
+    number-sections: true
+    theme: flatly
+    embed-resources: true
+    smooth-scroll: true
+    code-block-bg: true
+    code-fold: false
+    df-print: paged
+---
+
+
+# Overview
+
+
+## enteric-typer Wiki
+
+**enteric-typer** is a species-gated genotyping pipeline for enteric pathogens. It accepts genome assemblies, automatically identifies the species of each sample, runs the appropriate typing tools in parallel, builds a whole-genome SNP phylogeny, and produces publication-ready summary figures.
+
+---
+
+### Navigation
+
+#### Pipeline logic
+- [Species Detection](Species-Detection) — how Mash-based species assignment works and why
+- [Assembly QC](Assembly-QC) — genome size filters, contamination screening, what fails and why
+- [AMR Classification](AMR-Classification) — AMRrules, intrinsic vs acquired resistance, drug class definitions
+- [SNP Phylogenetics](SNP-Phylogenetics) — SKA2 alignment, IQ-TREE inference, what distances mean
+
+#### Per-species typing tools
+- [E. coli Typing](E-coli-Typing) — MLST, ECTyper, EzClermont, Kleborate, Kaptive
+- [Salmonella Typing](Salmonella-Typing) — MLST, SISTR, serovar assignment
+- [Shigella Typing](Shigella-Typing) — ShigEiFinder, Mykrobe, pINV screen, IS element screen
+
+#### Output figures — interpretation guide
+- [Fig 1 — Population Summary](Fig1-Population-Summary) — ST distribution, serovar/serotype bars, AMR prevalence, MDR
+- [Fig 2 — Phylogeny and AMR](Fig2-Phylogeny-and-AMR) — whole-genome SNP tree annotated with typing and resistance
+- [Fig 3 — AMR Genes](Fig3-AMR-Genes) — acquired resistance gene prevalence
+- [Fig 4 — Plasmid Overview](Fig4-Plasmid-Overview) — replicon prevalence, AMR co-occurrence, auto-layout logic
+- [Fig 5 — Virulence](Fig5-Virulence) — virulence factor prevalence
+- [Fig 6 — AMR by ST](Fig6-AMR-by-ST) — drug class prevalence stratified by MLST sequence type
+- [Fig 7 — AMR by Group](Fig7-AMR-by-Group) — drug class prevalence by serovar / phylogroup / serotype
+- [Shigella-Specific Figures](Shigella-Specific-Figures) — serotype composition (Fig 8), virulence/invasion panel (Fig 9)
+- [SNP Distance Heatmap](SNP-Distance-Heatmap) — pairwise whole-genome SNP distances
+
+#### Reference
+- [Output File Reference](Output-File-Reference) — all TSV columns explained
+- [Parameters](Parameters) — every `--flag` and its default
+- [FAQ and Troubleshooting](FAQ-and-Troubleshooting)
+
+---
+
+### Quick orientation
+
+```
+Input assemblies
+       │
+       ▼
+  Species detection (Mash)
+       │
+  ┌────┴────────────────┐
+  ▼         ▼           ▼
+E. coli  Salmonella  Shigella  → other: logged, skipped
+  │         │           │
+  └────┬────┘           │
+       ▼                ▼
+  Typing tools     Typing tools
+  (in parallel)    (in parallel)
+       │
+       ▼
+  SNP phylogeny (SKA2 + IQ-TREE)
+       │
+       ▼
+  Aggregate → TSV results
+       │
+       ▼
+  Summary figures (PDF + PNG)
+```
+
+Each stage is described in detail in the linked pages above.
+
+
+---
+
+
+# Pipeline Logic
+
+
+## Species Detection
+
+enteric-typer identifies the species of every input assembly before any typing tool runs. All downstream tool selection, QC thresholds, and figure labelling depend on this step.
+
+---
+
+### Method: Mash distance to a reference sketch
+
+Species assignment uses [Mash](https://github.com/marbl/Mash) — a MinHash-based tool that estimates genomic distance extremely rapidly without alignment. Each input assembly is compared against a pre-built sketch containing 13 representative reference genomes (one per species or phylogroup).
+
+The principle is **nearest-reference wins**: whichever reference genome has the lowest Mash distance to the query assembly determines the species call. This is the same approach used by [Kleborate](https://github.com/klebgenomics/Kleborate) for *K. pneumoniae* species complex assignment.
+
+#### Reference genomes in the sketch
+
+| Species / phylogroup | Reference strain | NCBI accession |
+|---|---|---|
+| *E. coli* phylogroup A | K-12 MG1655 | GCF_000005845.2 |
+| *E. coli* phylogroup B1 | SE11 | GCF_000010485.1 |
+| *E. coli* phylogroup B2 | CFT073 | GCF_000007445.1 |
+| *E. coli* phylogroup D | UMN026 | GCF_000026265.1 |
+| *E. coli* phylogroup E | O157:H7 EDL933 | GCF_000006665.1 |
+| *S. enterica* Typhimurium | LT2 | GCF_000006945.2 |
+| *S. enterica* Typhi | CT18 | GCF_000195995.1 |
+| *S. enterica* Enteritidis | P125109 | GCF_000009505.1 |
+| *S. sonnei* | ATCC 29930 | GCF_002950395.1 |
+| *S. flexneri* | 2a 2457T | GCF_000007405.1 |
+| *S. boydii* | Sb227 | GCF_000012025.1 |
+| *S. dysenteriae* | Sd197 | GCF_000012005.1 |
+| *K. pneumoniae* | HS11286 | GCF_000240185.1 |
+
+Multiple *E. coli* phylogroup references are included because phylogroups B2 and D are genomically closer to *Shigella* than phylogroup A or B1 isolates are. Without phylogroup representation, B2 isolates might be miscalled as Shigella.
+
+---
+
+### Decision logic
+
+```
+For each input assembly:
+  Compute Mash distance to every reference in the sketch
+       │
+       ▼
+  Find minimum distance reference
+       │
+       ├── distance ≤ 0.05 and reference is E. coli phylogroup?
+       │        └── call: E_coli
+       │
+       ├── distance ≤ 0.05 and reference is Shigella spp.?
+       │        └── call: Shigella
+       │
+       ├── distance ≤ 0.05 and reference is Salmonella?
+       │        └── call: Salmonella_enterica
+       │
+       ├── distance ≤ 0.05 and reference is K. pneumoniae?
+       │        └── call: Klebsiella  (logged only, not typed)
+       │
+       └── distance > 0.05 or no confident match?
+                └── call: Unknown  (logged, skipped)
+```
+
+The output for each sample is written to `results/species_check/<sample>_species.txt` and contains the called species label and the Mash distance to the winning reference.
+
+---
+
+### Why Shigella is correctly distinguished from E. coli
+
+*Shigella* species are phylogenetically nested within the *E. coli* species complex — they are, genomically, *E. coli* that have acquired a virulence plasmid and undergone pathoadaptive evolution. This creates a species assignment challenge.
+
+The pipeline handles this correctly because the sketch contains dedicated *Shigella* references from all four species (*S. sonnei*, *S. flexneri*, *S. boydii*, *S. dysenteriae*). Genuine *Shigella* isolates have their lowest Mash distance to one of these four references, not to any *E. coli* reference — the unique accessory genome content (pINV virulence plasmid, IS element repertoire, loss of genes like *cadA*) shifts the overall genomic distance enough that nearest-reference wins correctly.
+
+*E. coli* phylogroup B2 isolates — which are the *E. coli* most genomically similar to *Shigella* — are still called *E. coli* because they retain sufficient *E. coli*-specific core genome content to be slightly closer to the CFT073 (B2) reference than to any *Shigella* reference.
+
+---
+
+### What happens to unrecognised species
+
+Assemblies with no confident species match (Mash distance > 0.05 to all references, or nearest reference is *K. pneumoniae*) are:
+
+1. Written to `results/species_check/` with their best-match label and distance
+2. Excluded from all typing steps
+3. Still counted in sample totals and noted in the pipeline log
+
+They do not cause the pipeline to fail. This is intentional — mixed-species datasets (e.g. a batch that accidentally includes a *Klebsiella* sample) run to completion for the recognised species without manual intervention.
+
+---
+
+### Updating the reference sketch
+
+To add a new species or update a reference genome, edit `assets/build_references.sh` and add the NCBI accession. Reference FASTA filenames must begin with a recognised prefix that maps to an internal species label:
+
+| Filename prefix | Species label |
+|---|---|
+| `Ecoli_` or `Escherichia_` | `E_coli` |
+| `Salmonella_` | `Salmonella_enterica` |
+| `Shigella_` | `Shigella` |
+| `Klebsiella_` | `Klebsiella` |
+
+Then rebuild the sketch: `bash assets/build_references.sh`
+
+
+---
+
+
+## Assembly QC
+
+Before any typing tools run, each assembly is evaluated against quality thresholds. Assemblies that fail are logged and excluded from all downstream analysis — they do not cause the pipeline to abort.
+
+---
+
+### QC checks applied
+
+#### 1. Genome size
+
+The total assembly length (sum of all contigs) must fall within species-specific bounds. Assemblies outside this range are flagged as likely contaminated, misassembled, or mislabelled.
+
+| Species | Minimum (bp) | Maximum (bp) | Source |
+|---|---|---|---|
+| *E. coli* / *Shigella* | 4,300,000 | 5,900,000 | BIGSdb *E. coli* genome quality criteria |
+| *Salmonella enterica* | 4,100,000 | 6,600,000 | PATH-SAFE consortium recommendations (Table 3) |
+
+These thresholds can be overridden per-run:
+```
+--ecoli_min_length 4000000
+--ecoli_max_length 6200000
+--shigella_min_length 4000000
+--salmonella_min_length 4000000
+```
+
+**Why size matters:**
+- A genome much smaller than expected typically indicates incomplete assembly, high contamination, or an incorrect species assignment
+- A genome much larger than expected suggests contamination with a second organism or a misassembly creating duplicated regions
+
+#### 2. Contamination screening (optional)
+
+If `--kraken2_db` is provided, each assembly is screened with [Kraken2](https://github.com/DerrickWood/kraken2) against a standard bacterial database. The proportion of contigs classified as a secondary species is computed.
+
+An assembly fails if the secondary species makes up > 3% of total contigs (`--max_contamination 3.0`).
+
+This check is **skipped** when `--kraken2_db` is not provided and does not block the run.
+
+---
+
+### Decision tree
+
+```
+Assembly received
+       │
+       ▼
+Is total length within species range?
+       │
+       ├── NO  → mark FAIL (size), log, skip all typing
+       │
+       └── YES
+               │
+               ▼
+       Is --kraken2_db provided?
+               │
+               ├── NO  → proceed to typing
+               │
+               └── YES
+                       │
+                       ▼
+               Kraken2: secondary species < 3%?
+                       │
+                       ├── NO  → mark FAIL (contamination), log, skip
+                       │
+                       └── YES → proceed to typing
+```
+
+---
+
+### What counts as "failed"
+
+Failed samples are:
+- Written to the pipeline log with the reason for failure
+- Excluded from all typing outputs (no row in the results TSV)
+- Excluded from all figures (not plotted)
+- Counted in the pipeline summary so you know how many samples did not make it through
+
+A failed assembly does **not** stop the pipeline from running for other samples.
+
+---
+
+### Assembly metrics figure
+
+Even for samples that pass QC, the **assembly metrics figure** (`{species}_assembly_metrics.{pdf,png}`) summarises per-assembly statistics across all samples of that species:
+
+| Panel | Metric | Expected range |
+|---|---|---|
+| A / B | Genome length (bp) | *E. coli*: 4.5–5.5 Mb; *Salmonella*: 4.5–5.2 Mb |
+| C / D | N50 (bp) | Higher is better; depends heavily on sequencing technology |
+| E / F | Number of contigs | Short-read: 50–300; Long-read/hybrid: 1–20 |
+| G / H | GC content (%) | *E. coli* / *Shigella*: ~51%; *Salmonella*: ~52% |
+
+Each metric is shown as both a histogram and a box plot. Dashed reference lines indicate the expected values for the species. Assemblies that are outliers in multiple metrics simultaneously warrant manual inspection.
+
+---
+
+### Notes on N50 and contig count
+
+**N50** is the contig length such that 50% of the total assembled sequence is in contigs of that length or longer. It is a summary of assembly contiguity:
+- Short-read (Illumina) assemblies typically have N50 of 50–500 kb and 50–400 contigs
+- Long-read (Nanopore/PacBio) assemblies typically have N50 of 2–6 Mb and 1–5 contigs
+- Hybrid assemblies typically fall between these ranges
+
+A very low N50 (< 20 kb) or very high contig count (> 1000) may indicate a poor-quality sequencing run or failed assembly step. These samples may still pass the size QC check but should be interpreted with caution.
+
+
+---
+
+
+## AMR Classification
+
+enteric-typer uses [AMRFinder Plus](https://github.com/ncbi/amr) to detect antimicrobial resistance (AMR) genes and mutations, then applies [AMRrules](https://github.com/AMRverse/AMRrules) to classify every detected gene as either **acquired** or **intrinsic**. This distinction is fundamental to how AMR results are presented across all figures and output tables.
+
+---
+
+### AMRFinder Plus: what it detects
+
+AMRFinder Plus screens each assembly against the NCBI AMR Reference Gene Database and reports:
+
+- **AMR genes** — genes conferring resistance by any mechanism (enzyme, efflux, target modification, etc.)
+- **Point mutations** — chromosomal mutations known to confer resistance (e.g. *gyrA* S83L for fluoroquinolones)
+- **Virulence genes** — pathogenicity-associated genes (reported separately; used in Fig 5 and the phylogeny annotation)
+- **Stress response genes** — genes conferring resistance to biocides, metals, heat (reported but not plotted by default)
+
+The pipeline runs AMRFinder with `--plus` (enables virulence and stress gene detection) and passes the appropriate `--organism` flag so that species-specific point mutation databases are applied.
+
+---
+
+### AMRrules: intrinsic vs acquired
+
+Not all AMR genes detected by AMRFinder are clinically or epidemiologically meaningful. Many are **intrinsic** — present in the wild-type genome of every isolate of that species and not acquired by horizontal gene transfer. Reporting these alongside genuinely acquired resistance creates noise that obscures real resistance signals.
+
+AMRrules provides a curated, species-specific list of genes that are intrinsic to each enteric pathogen. The pipeline applies these rules to every sample and splits the AMRFinder output into two lists:
+
+| Column | Definition |
+|---|---|
+| `amrfinder_acquired_genes` | Genes and mutations **not** on the intrinsic list — clinically relevant acquired resistance |
+| `amrfinder_intrinsic_genes` | Genes on the intrinsic list — wild-type background, recorded but not plotted |
+| `amrfinder_drug_classes` | Drug classes represented by acquired genes only |
+| `amrfinder_genes` | All raw AMRFinder output (for reference) |
+
+**All AMR figures use acquired genes only.** Intrinsic genes are retained in the TSV for completeness and transparency but are never included in prevalence bars, bubble matrices, heatmaps, or MDR counts.
+
+#### Examples of intrinsic genes excluded
+
+| Species | Gene | Drug class | Why intrinsic |
+|---|---|---|---|
+| *E. coli* / *Shigella* | `blaEC` | Beta-lactam | Chromosomal AmpC; present in all wild-type *E. coli* |
+| *E. coli* / *Shigella* | `acrB`, `acrF`, `mdtM`, `emrD` | Efflux | Constitutive efflux pumps; chromosomally encoded |
+| *Salmonella* | `mdsA`, `mdsB` | Efflux | Salmonella-specific efflux complex |
+| *Salmonella* | `acrB` | Efflux | As for *E. coli* |
+
+---
+
+### Drug class abbreviations
+
+All figures use the following short codes on axes and in legends:
+
+| Code | Full class | Clinical relevance |
+|---|---|---|
+| AMG | Aminoglycoside | Gentamicin, amikacin, tobramycin — bacteraemia, complicated UTI |
+| BLA | Beta-lactam | Ampicillin, cephalosporins, carbapenems — first-line for many infections |
+| COL | Colistin | Last-resort for carbapenem-resistant organisms |
+| FOS | Fosfomycin | UTI treatment; increasing use for ESBL isolates |
+| FOSM | Fosmidomycin | Investigational; rarely reported in enteric pathogens |
+| LIN | Lincosamide | Clindamycin; uncommon in enteric pathogens |
+| MAC | Macrolide | Azithromycin — key drug for *Shigella sonnei* treatment |
+| NIT | Nitrofuran | Nitrofurantoin — uncomplicated UTI |
+| PHE | Phenicol | Chloramphenicol — historically important for typhoid/NTS |
+| QNL | Quinolone | Ciprofloxacin, nalidixic acid — critically important for enteric infections |
+| SGM | Streptogramin | Quinupristine–dalfopristine; rarely relevant for enteric pathogens |
+| STR | Streptothricin | Nourseothricin; rare but carried on plasmids |
+| SUL | Sulfonamide | Sulfamethoxazole — component of co-trimoxazole |
+| TET | Tetracycline | Broad resistance marker; common on IncFII plasmids |
+| TMP | Trimethoprim | Component of co-trimoxazole — widely used for NTS in Africa |
+
+---
+
+### Multi-drug resistance (MDR) definition
+
+An isolate is classified as **multidrug resistant (MDR)** if it carries acquired resistance genes in **≥ 3** of the above drug classes.
+
+- The **EFFLUX** class is excluded from MDR counting. Efflux-mediated resistance to multiple classes via constitutive pumps is not considered acquired MDR because it is background for the species.
+- Only `amrfinder_acquired_genes` (AMRrules-filtered) are counted — intrinsic genes do not contribute to MDR status.
+
+This definition follows WHO/ECDC categorical definitions for MDR in Gram-negative bacteria.
+
+---
+
+### QUINOLONE/TRICLOSAN
+
+AMRFinder may report some mutations (e.g. *gyrA* point mutations at certain positions) under a combined class label `QUINOLONE/TRICLOSAN`. These are counted as **QUINOLONE** resistance for MDR classification and figure display, since clinical relevance in enteric pathogens is driven by fluoroquinolone use, not triclosan.
+
+
+---
+
+
+## SNP Phylogenetics
+
+enteric-typer builds a whole-genome SNP phylogeny for each species when ≥ 3 samples are present. The phylogeny is used to annotate Fig 2 and to order samples in Fig 4 (plasmid heatmap) and the SNP distance heatmap.
+
+Two tools are run sequentially: **SKA2** to compute a SNP alignment and pairwise distance matrix, then **IQ-TREE 2** to infer a maximum-likelihood phylogenetic tree.
+
+---
+
+### Step 1 — SKA2: split k-mer alignment
+
+[SKA2](https://github.com/bacpop/ska.rust) (split k-mer analysis) aligns genome assemblies **without a reference genome**. Instead of mapping reads or contigs to a fixed reference, it represents every assembly as a set of split k-mers (two flanking sequences of length *k* with a variable central base) and then identifies positions where the central base differs between samples.
+
+#### Why no reference genome?
+
+- Reference-free alignment avoids reference bias: positions absent from the chosen reference are not excluded.
+- For a species-gated pipeline covering multiple serovars or phylogroups, no single reference adequately represents all input diversity.
+- SKA2 is fast enough to run genome-wide on a typical workstation even for datasets of hundreds of samples.
+
+#### Parameters
+
+| Parameter | Value | Rationale |
+|---|---|---|
+| k-mer length (`-k`) | 31 | Balances sensitivity and specificity; 31 is the SKA2 default and performs well for bacterial genomes |
+| Minimum frequency | default | Retains all variant positions seen in ≥ 2 samples |
+
+#### Outputs
+
+- `ska2_alignment.fasta` — multi-sample SNP alignment (one sequence per sample, gap = not called at that position)
+- `snp_matrix.tsv` — pairwise SNP distance matrix (raw count of differing positions between each pair)
+
+---
+
+### Step 2 — IQ-TREE 2: maximum-likelihood tree
+
+[IQ-TREE 2](http://www.iqtree.org/) infers a maximum-likelihood phylogeny from the SKA2 SNP alignment.
+
+#### Default model: GTR+G
+
+The generalised time-reversible model with gamma-distributed rate variation (GTR+G) is used by default. GTR is appropriate because:
+
+- It is the most parameter-rich standard substitution model, making no assumption that substitution rates are equal across base pairs.
+- Gamma rate variation accounts for the fact that some SNP positions evolve faster than others (e.g. synonymous sites vs. regulatory regions).
+- For whole-genome SNP data from bacterial genomes, GTR+G gives robust topology estimates in most settings.
+
+To use automatic model selection (ModelFinder Plus), pass `--iqtree_model MFP`. This tests a large set of substitution models and selects the one with the best BIC score. It is slower but more rigorous for publication-quality analyses.
+
+#### Bootstrap support
+
+By default, **100 ultrafast bootstrap replicates** (UFBoot) are computed. UFBoot values ≥ 95 are considered well-supported in IQ-TREE's framework (UFBoot values are not directly comparable to standard bootstrap — 95 UFBoot ≈ 70–80 standard bootstrap in terms of topological confidence).
+
+#### Midpoint rooting
+
+IQ-TREE produces an unrooted tree. enteric-typer roots it at the midpoint (the point on the longest branch that makes both resulting subtrees as equal in total branch length as possible) before display. Midpoint rooting is the standard approach when no outgroup is available, and is appropriate for within-species datasets where all samples have similar evolutionary distance from a common ancestor.
+
+---
+
+### Interpreting branch lengths and SNP distances
+
+Branch lengths in the tree represent **substitutions per site** in the SNP alignment. Because the alignment contains only variable positions (not the full genome), branch lengths are expressed relative to the number of variant sites detected, not the full chromosome length.
+
+The **SNP distance matrix** gives raw pairwise distances in number of differing positions across the whole-genome SKA2 alignment. These values can be used for:
+
+- **Cluster definition**: isolates within ≤ 10–20 SNPs are considered potentially linked in outbreak investigations (the threshold depends on the organism and study context)
+- **Quality checking**: unexpectedly large distances between phenotypically similar isolates may indicate mislabelling or contamination
+
+#### Typical SNP distance ranges (within-species)
+
+| Comparison | Expected SNP range |
+|---|---|
+| Same patient, same admission | 0–5 SNPs |
+| Putative outbreak cluster | 5–20 SNPs |
+| Same ST, unrelated | 50–500 SNPs |
+| Different STs, same species | 500–50,000 SNPs |
+| Different *Shigella* species | 20,000–100,000 SNPs |
+
+These are rough guides. Ranges vary substantially by species, ST, and the evolutionary rate of the lineage in question.
+
+---
+
+### When phylogenetics is skipped
+
+Phylogenetics runs per species when ≥ 3 samples of that species are present. It is automatically skipped when:
+
+- Fewer than 3 samples are assigned to a species (`--ska2_min_samples`, default 3)
+- `--skip_local_phylo` is passed
+
+When skipped, Figs 2, 4 (tree panel), and the SNP heatmap are not produced. All other figures are unaffected.
+
+
+---
+
+
+# Typing Tools
+
+
+## E. coli Typing Tools
+
+*E. coli* assemblies are run through six typing tools that together characterise sequence type, serotype, capsule type, phylogroup, pathotype, and virulence potential. All results are aggregated into the `ecoli_typer_results.tsv` output file.
+
+---
+
+### 1. MLST — Multi-locus sequence typing
+
+**Tool**: [mlst](https://github.com/tseemann/mlst) (Torsten Seemann)  
+**Scheme**: `ecoli_achtman_4` — the Warwick Achtman 7-locus scheme (PubMLST)  
+**Output columns**: `mlst_scheme`, `mlst_st`, `mlst_st_complex`
+
+The Achtman scheme uses seven housekeeping gene loci (*adk*, *fumC*, *gyrB*, *icd*, *mdh*, *purA*, *recA*). Each unique combination of alleles defines a sequence type (ST). STs are assigned a sequence type complex (ST complex) where relevant, based on a curated lookup table.
+
+#### Interpreting MLST results
+
+- **Numbered ST** (e.g. ST131, ST73): confident assignment; all 7 alleles found
+- **ST with tilde** (e.g. ~ST131): closest match but not an exact allele match — treat as provisional
+- **NA**: fewer than 7 loci found; assembly may be fragmented or contaminated
+- **Novel**: allele combination not yet in the PubMLST database
+
+Common clinically important *E. coli* STs:
+
+| ST | Phylogroup | Notable features |
+|---|---|---|
+| ST131 | B2 | Global ESBL/fluoroquinolone-resistant ExPEC pandemic clone |
+| ST73 | B2 | Common ExPEC; often carries *iutA*, *hlyA* |
+| ST95 | B2 | ExPEC; neonatal meningitis association |
+| ST1193 | B2 | Emerging fluoroquinolone-resistant clade |
+| ST10 | A | Broad environmental niche; diverse plasmids |
+| ST58 | B1 | Livestock-associated; common ESBL carrier in food animals |
+| ST410 | C | Carbapenemase-associated (NDM, OXA-48) |
+| ST167 | A | Associated with ESBL and MCR |
+
+---
+
+### 2. ECTyper — O:H serotyping
+
+**Tool**: [ECTyper](https://github.com/phac-nml/ecoli_serotyping) v1.0  
+**Output columns**: `ectyper_O`, `ectyper_H`, `ectyper_serotype`, `ectyper_qc`, `ectyper_evidence`
+
+ECTyper predicts O (somatic lipopolysaccharide) and H (flagellar) antigen types by BLASTing the assembly against a curated reference database of O-antigen biosynthesis genes (*wzx/wzy*, *wbgA-Z*) and H-antigen genes (*fliC*). Thresholds used: 90% identity, 50% coverage (for both O and H).
+
+#### Output fields
+
+| Column | Description |
+|---|---|
+| `ectyper_O` | O-antigen type (e.g. O25, O6) |
+| `ectyper_H` | H-antigen type (e.g. H4, H31) |
+| `ectyper_serotype` | Combined O:H call (e.g. O25:H4) |
+| `ectyper_qc` | QC flag: PASS / WARN / FAIL |
+| `ectyper_evidence` | Number of marker genes found supporting the call |
+
+#### Common serotypes and their significance
+
+| Serotype | Notes |
+|---|---|
+| O25:H4 | ST131 — dominant ESBL/ExPEC clone globally |
+| O6:H1 | ST69 — cystitis-associated |
+| O1:H7 / O2:H6 | ST95, ST73 — ExPEC |
+| O157:H7 | EHEC/STEC — Shiga toxin-producing; notifiable |
+| O104:H4 | STEC — caused 2011 Germany outbreak |
+
+---
+
+### 3. EzClermont — Clermont phylogroup
+
+**Tool**: [EzClermont](https://github.com/nickp60/EzClermont)  
+**Output column**: `clermont_phylogroup`
+
+EzClermont applies the Clermont 2013 PCR-based phylotyping scheme *in silico* to assembled genomes. It determines which Clermont phylogroup (A, B1, B2, C, D, E, F, or cryptic clades) an isolate belongs to by checking for the presence or absence of PCR amplicon sequences: *chuA*, *yjaA*, *TspE4.C2*, and *arpA*.
+
+Minimum contig length is set to 200 bp (rather than the default 500 bp) to retain diagnostic loci in short-contig assemblies.
+
+#### Phylogroup colour coding
+
+Phylogroup colours used throughout the pipeline figures:
+
+| Colour | Phylogroup | Typical niche |
+|---|---|---|
+| Blue | A | Commensal; diverse environments |
+| Green | B1 | Commensal; livestock; water |
+| Orange | B2 | ExPEC; UTI, bacteraemia |
+| Teal | C | Clinical; less common |
+| Red | D | Clinical; fluoroquinolone-resistant clones |
+| Purple | E | O157:H7 and relatives |
+| Pink | F | Rare; includes some ExPEC |
+| Grey | Unknown | Assignment failed |
+
+---
+
+### 4. Kleborate — Pathotyping + virulence markers
+
+**Tool**: [Kleborate](https://github.com/klebgenomics/Kleborate) v3, preset `escherichia`  
+**Output columns**: `kleborate_pathovar`, `kleborate_Stx1`, `kleborate_Stx2`, `kleborate_eae`, `kleborate_ipaH`, `kleborate_LT`, `kleborate_ST_toxin`
+
+Kleborate v3 with the `escherichia` preset runs several sub-modules:
+
+- **Pathotype detection**: classifies each isolate as STEC, EHEC, EPEC, ETEC, or EIEC based on virulence markers
+- **Toxin typing**: detailed Shiga toxin subtype (Stx1a, Stx1c, Stx2a, Stx2b, etc. via StxTyper)
+- **Virulence markers**: individual presence/absence calls for Stx1, Stx2, eae (intimin), ipaH, LT, ST-toxin
+
+#### Pathotype logic
+
+| Pathotype | Required markers | Disease |
+|---|---|---|
+| EHEC | Stx + eae | Haemorrhagic colitis, HUS |
+| STEC | Stx (any), no eae required | Bloody/watery diarrhoea |
+| EPEC | eae, no Stx | Infantile diarrhoea |
+| EIEC | ipaH | Dysentery-like illness |
+| ETEC | LT and/or ST-toxin | Travellers' diarrhoea |
+| − | None of the above | ExPEC or commensal |
+
+Note: Kleborate can produce compound calls (e.g. `STEC/EPEC`) when multiple marker combinations are present. Each component is counted independently in Fig 5.
+
+---
+
+### 5. Kaptive — Capsular K-locus typing
+
+**Tool**: [Kaptive](https://github.com/klebsimonics/Kaptive) v3  
+**Databases**: Group 2/3 (Gladstone et al. 2024) + Group 1/4 (custom, efosternyarko/EC-K-typing-G1G4)  
+**Output columns**: `k_group`, `k_locus`, `k_type`, `k_confidence`
+
+Kaptive types the *E. coli* capsular K-locus — the genomic region encoding the polysaccharide capsule biosynthesis machinery. The pipeline implements a two-step workflow:
+
+#### Step 1 — Group 2/3 database
+
+All assemblies are typed against the Kaptive Group 2/3 reference database. Samples that receive a confident assignment are classified as Group 2 (K-loci with *kpsC/kpsS* gene cluster) or Group 3.
+
+#### Step 2 — Group 1/4 database (untypeables only)
+
+Assemblies that are "Untypeable" under the Group 2/3 database are re-typed using the Group 1/4 database in `--scores` mode. Raw alignment scores are normalised by expected locus CDS length to achieve full typeability on G1/G4 strains.
+
+**Why two separate databases?** Group 1/4 and Group 2/3 loci share some synteny and database cross-hits can cause misclassification (*wzy* interference). Running both simultaneously gives incorrect calls on a subset of samples.
+
+#### K-locus groups and clinical significance
+
+| Group | Biosynthesis pathway | Notable associations |
+|---|---|---|
+| G1 | Wzy-dependent lipopolysaccharide-linked | Invasive ExPEC; neonatal meningitis; K1, K5 |
+| G2 | ABC transporter-dependent | Diverse; K2 associated with virulent ExPEC |
+| G3 | ABC transporter-dependent | Diverse |
+| G4 | Wzy-dependent | Uropathogenic *E. coli*; K30, K40 |
+
+K1 (Group 1) is the most common capsule type in neonatal meningitis isolates. K2 (Group 2) is associated with virulent liver abscess *E. coli* (Klebsiella-like presentation). K5 (Group 1) is common in UTI isolates.
+
+#### Output fields
+
+| Column | Description |
+|---|---|
+| `k_group` | Broad group: G1, G2, G3, G4, or Unknown |
+| `k_locus` | Specific locus designation (e.g. KL1, KL2) |
+| `k_type` | Antigenic K-type where known (e.g. K1, K2) |
+| `k_confidence` | Kaptive match confidence: Perfect / Good / Low / Untypeable |
+
+---
+
+### 6. PlasmidFinder — Replicon typing
+
+**Tool**: [PlasmidFinder](https://cge.food.dtu.dk/services/PlasmidFinder/) (CGE)  
+**Database**: `enterobacteriaceae`  
+**Output column**: `plasmidfinder_replicons`
+
+Screens the assembly for known plasmid replicon sequences (Inc types). Results are used directly in Fig 4 (plasmid overview). See [Fig 4 — Plasmid Overview](Fig4-Plasmid-Overview.md) for interpretation.
+
+---
+
+### Tool versions (default containers)
+
+| Tool | Version |
+|---|---|
+| mlst | 2.23.0 |
+| ECTyper | 1.0.0 |
+| EzClermont | current conda |
+| Kleborate | 3.1.3 |
+| Kaptive | 3.0.0b5 |
+| AMRFinder Plus | see `amrfinder --version` |
+| PlasmidFinder | current conda |
+
+
+---
+
+
+## Salmonella Typing Tools
+
+*Salmonella enterica* assemblies are run through MLST and SISTR for lineage and serovar assignment, plus AMRFinder and PlasmidFinder for resistance and plasmid characterisation. All results are aggregated into `salmonella_typer_results.tsv`.
+
+---
+
+### 1. MLST — Multi-locus sequence typing
+
+**Tool**: [mlst](https://github.com/tseemann/mlst) (Torsten Seemann)  
+**Scheme**: `senterica_achtman_2` — the Warwick Achtman 7-locus scheme for *S. enterica*  
+**Output columns**: `mlst_scheme`, `mlst_st`, `mlst_st_complex`
+
+The *Salmonella* Achtman scheme uses seven housekeeping loci (*aroC*, *dnaN*, *hemD*, *hisD*, *purE*, *sucA*, *thrA*). STs are mapped to ST complexes (e.g. ST19 complex, ST313 complex) using a curated lookup table.
+
+#### Common clinically important *Salmonella* STs
+
+| ST | Serovar | Notable features |
+|---|---|---|
+| ST19 | Typhimurium | Global dominance; diverse plasmids; often MDR |
+| ST34 | I 4,[5],12:i:- | Monophasic Typhimurium; pandemic MDR lineage |
+| ST11 | Enteritidis | Dominant in poultry; often relatively susceptible |
+| ST1 | Typhi | Typhoid fever; *Salmonella* Typhi exclusively |
+| ST2 | Typhi | Typhoid fever |
+| ST313 | Typhimurium ST313 | African invasive NTS (iNTS); MDR |
+| ST198 | Kentucky | Globally disseminated fluoroquinolone-resistant clone |
+
+---
+
+### 2. SISTR — Salmonella in silico serotyping
+
+**Tool**: [SISTR](https://github.com/peterk87/sistr_cmd) v1.1.2  
+**Output columns**: `sistr_serovar`, `sistr_serovar_antigen`, `sistr_serovar_cgmlst`, `sistr_O`, `sistr_H1`, `sistr_H2`, `sistr_cgmlst_ST`, `sistr_qc`
+
+SISTR predicts *Salmonella* serovar from assembled genomes by combining three independent approaches and returning a consensus call:
+
+#### Three prediction methods
+
+**1. Antigen sequence typing** (primary)  
+BLASTs the assembly against reference sequences for the flagellar antigens (*fliC*, *fljB*) and O-antigen biosynthesis genes (*wzx/wzy*, *wbgA*). Assigns H1, H2, and O antigens according to the Kauffmann-White scheme.
+
+**2. cgMLST** (corroborative)  
+Uses a 330-locus *Salmonella*-specific core genome MLST scheme to predict serovar. Provides an independent check and produces a cgMLST sequence type.
+
+**3. mash sketch comparison** (fallback)  
+For assemblies where antigen typing fails, compares assembly MinHash sketches to a sketch database of reference serovars.
+
+#### Output fields
+
+| Column | Description |
+|---|---|
+| `sistr_serovar` | Consensus predicted serovar (Kauffmann-White name, e.g. Typhimurium) |
+| `sistr_serovar_antigen` | Serovar predicted from antigen typing alone |
+| `sistr_serovar_cgmlst` | Serovar predicted from cgMLST alone |
+| `sistr_O` | O-antigen formula (e.g. `4,5,12`) |
+| `sistr_H1` | Phase 1 H antigen (e.g. `i`) |
+| `sistr_H2` | Phase 2 H antigen (e.g. `1,2` or `-` for monophasic) |
+| `sistr_cgmlst_ST` | cgMLST sequence type |
+| `sistr_qc` | QC status: PASS / WARNING / FAIL |
+
+#### The monophasic Typhimurium variant
+
+*S.* Typhimurium variant **I 4,[5],12:i:-** is a monophasic form (H2 antigen = `-`) that has spread globally as a pandemic MDR lineage (predominantly ST34). SISTR correctly assigns this as a distinct serovar from classical Typhimurium (I 4,[5],12:i:1,2). Both appear prominently in European and African datasets.
+
+#### When SISTR disagrees with MLST
+
+SISTR serovar and MLST ST are correlated but not equivalent. Multiple STs can share a serovar (e.g. Typhimurium includes ST19, ST34, ST313), and a single ST can produce different serovars if the O/H antigen genes are on mobile elements. If SISTR and MLST give apparently contradictory results, check:
+
+1. The QC status (`sistr_qc`) — a FAIL or WARNING may indicate assembly fragmentation affecting antigen gene detection
+2. The `sistr_serovar_antigen` vs `sistr_serovar_cgmlst` columns — agreement between the two methods increases confidence
+3. Whether the discrepant serovar-ST combination is documented (some are; e.g. ST19 is associated with both Typhimurium and Agona)
+
+---
+
+### 3. AMRFinder Plus
+
+**Organism flag**: `--organism Salmonella`  
+Activates species-specific point mutation databases for AMRFinder, including chromosomal resistance mutations in *gyrA*, *parC* (quinolones), *pmrA/B*, *mgrB* (colistin — limited), and others.
+
+See [AMR Classification](AMR-Classification.md) for full documentation.
+
+---
+
+### 4. PlasmidFinder
+
+**Database**: `enterobacteriaceae`  
+**Output column**: `plasmidfinder_replicons`
+
+See [Fig 4 — Plasmid Overview](Fig4-Plasmid-Overview.md) for interpretation of replicon results.
+
+Common *Salmonella* replicon types and their resistance associations:
+
+| Replicon | Common cargo | Notes |
+|---|---|---|
+| IncFII(S) | MDR cassettes (blaTEM-1, tetAB, sul1, cat) | Classic DT104-related MDR plasmids |
+| IncFIB(S) | Often co-resident with IncFII(S) | |
+| IncI1 | blaCTX-M ESBLs, tetA | Broad host range; common in NTS |
+| IncA/C2 | blaCMY, aac, sul | Cephalosporin resistance |
+| IncX1 | blaNDM carbapenemase | Carbapenem resistance — alert |
+| IncHI2 | mcr-1 colistin resistance | Last-resort resistance — alert |
+| Col156 | Cryptic; no resistance | Background plasmid |
+
+
+---
+
+
+## Shigella Typing Tools
+
+*Shigella* assemblies are run through five dedicated typing and screening steps in addition to MLST, AMRFinder, and PlasmidFinder. All results are aggregated into `shigella_typer_results.tsv`.
+
+---
+
+### 1. MLST
+
+**Scheme**: `ecoli_achtman_4`  
+*Shigella* species are phylogenetically *E. coli*, so the *E. coli* Achtman MLST scheme is used. This correctly assigns STs to *Shigella* isolates.
+
+Notable STs:
+- **ST152**: global *S. sonnei* pandemic lineage
+- **ST148**, **ST145**: common *S. flexneri* lineages
+- *S. dysenteriae* and *S. boydii* have no dominant single ST
+
+---
+
+### 2. ShigEiFinder — Species and serotype
+
+**Tool**: [ShigEiFinder](https://github.com/LanLab/ShigEiFinder) v1.3.5  
+**Output columns**: `shigeifinder_ipaH`, `shigeifinder_virulence_plasmid`, `shigeifinder_cluster`, `shigeifinder_serotype`, `shigeifinder_o_antigen`, `shigeifinder_h_antigen`
+
+ShigEiFinder identifies *Shigella* species and serotype using a curated marker gene database. It covers all four *Shigella* species and their major serotypes, including all *S. flexneri* subtypes (1a, 1b, 2a, 2b, X, Y, and variants).
+
+#### Key output fields
+
+| Column | Description |
+|---|---|
+| `shigeifinder_ipaH` | ipaH status: `pos` (present) or `neg` (absent) — critical virulence marker |
+| `shigeifinder_virulence_plasmid` | Virulence plasmid classification (pINV presence/type) |
+| `shigeifinder_cluster` | ShigEiFinder cluster ID |
+| `shigeifinder_serotype` | Serotype call (e.g. `SS` = *S. sonnei*, `SF2a` = *S. flexneri* 2a) |
+| `shigeifinder_o_antigen` | O-antigen formula |
+| `shigeifinder_h_antigen` | H-antigen (non-motile in most *Shigella*) |
+
+#### Serotype prefix conventions
+
+| Prefix | Species |
+|---|---|
+| `SS` | *S. sonnei* |
+| `SF1a`, `SF2a`, etc. | *S. flexneri* (subtype follows) |
+| `SB1`, `SB2`, etc. | *S. boydii* |
+| `SD1`, `SD7`, etc. | *S. dysenteriae* |
+
+#### ipaH as a diagnostic marker
+
+**ipaH is the gold standard molecular marker for *Shigella* and EIEC.** It encodes a leucine-rich repeat effector protein secreted by the type III secretion system and is found on the pINV virulence plasmid. All pathogenic *Shigella* carry ipaH; its absence strongly suggests the virulence plasmid has been lost (plasmid curing occurs during serial laboratory passage and rarely in clinical isolates).
+
+---
+
+### 3. Mykrobe — *S. sonnei* genotyping
+
+**Tool**: [Mykrobe](https://github.com/Mykrobe-tools/mykrobe) with sonnei panel `20210201` (Hawkey et al. 2021)  
+**Output columns**: `mykrobe_genotype`, `mykrobe_lineage`, `mykrobe_clade`, `mykrobe_subclade`, `mykrobe_genotype_name`, `mykrobe_confidence`
+
+Mykrobe assigns *S. sonnei* isolates to the Hawkey 2021 global phylogenetic framework (lineages 1–4, with sub-clades). This framework was developed specifically for the global *S. sonnei* pandemic and correlates genotype with:
+- Geographic origin
+- Azithromycin resistance (lineage 3 clade III carries ICEShSon1 encoding *mph(A)* and *ermB*)
+- Fluoroquinolone resistance (multiple independent acquisitions mapped to lineages)
+- Ceftriaxone resistance emergence (lineage 3.6.1, XDR clade)
+
+#### Mykrobe output for non-sonnei isolates
+
+Mykrobe is run on all *Shigella* assemblies because species is not always known in advance. For non-*S. sonnei* assemblies, Mykrobe will return a low-confidence or failed result; these are stored as NA and do not affect downstream figures.
+
+#### Mykrobe columns
+
+| Column | Description |
+|---|---|
+| `mykrobe_lineage` | Top-level lineage (e.g. lineage3) |
+| `mykrobe_clade` | Sub-lineage clade (e.g. lineage3.6) |
+| `mykrobe_subclade` | Further resolution (e.g. lineage3.6.1) |
+| `mykrobe_genotype` | Full genotype string |
+| `mykrobe_genotype_name` | Human-readable name for this genotype |
+| `mykrobe_confidence` | Confidence of the genotype call |
+
+---
+
+### 4. pINV screen — Invasion plasmid marker genes
+
+**Method**: BLASTn against curated pINV marker gene database  
+**Thresholds**: ≥ 80% identity, ≥ 80% query coverage  
+**Output columns**: `pinv_present`, `pinv_genes`
+
+The pINV screen detects six key pINV invasion genes individually:
+
+| Gene | Protein | Role |
+|---|---|---|
+| icsA / virG | IcsA | Actin nucleation; intracellular motility and cell-to-cell spread |
+| virF | VirF | Master virulence transcription factor (AraC family) |
+| virB | VirB | Activates ipa operon; activated by VirF |
+| ipaB | IpaB | TTSS effector; macrophage apoptosis; pore formation |
+| ipaC | IpaC | TTSS effector; membrane insertion |
+| ipaD | IpaD | TTSS needle tip; controls effector secretion |
+
+`pinv_present`: `TRUE` if any gene detected at threshold; `FALSE` otherwise.  
+`pinv_genes`: semicolon-separated list of detected genes with percentage identity and coverage.
+
+A complete, functional pINV plasmid should carry all six genes. Partial gene sets suggest plasmid deletions.
+
+---
+
+### 5. IS element screen — Insertion sequence copy numbers
+
+**Method**: BLASTn against IS element reference sequences  
+**Thresholds**: ≥ 85% identity  
+**Output column**: `is_elements` (format: `IS1(3);IS600(12);IS629(1)`)
+
+Screens for six IS element families:
+
+| Element | Copies in a typical *S. sonnei* pandemic isolate | Significance |
+|---|---|---|
+| IS1 | 5–15 | Ubiquitous; involved in gene disruption |
+| IS1A | 0–5 | IS1 variant |
+| IS30 | 0–10 | Gene disruption; present in multiple species |
+| IS186 | 0–5 | Common |
+| IS600 | 8–25 | High copy number marks *S. sonnei* pandemic clade ST152 |
+| IS629 | 0–10 | O-antigen modification in *S. flexneri* |
+
+Copy numbers are reported as counts of distinct BLAST hits above threshold on distinct contig positions. The `is_elements` column encodes copy numbers as `ISname(n)` tuples separated by semicolons.
+
+IS copy numbers are visualised in Fig 1 Panel B (IS element landscape heatmap) and Fig 9 (Shigella features panel).
+
+---
+
+### 6. AMRFinder Plus
+
+**Organism flag**: `--organism Escherichia` (correct for *Shigella* — same species complex)  
+Applies the same point mutation database as for *E. coli*.
+
+Key resistance mechanisms in *Shigella*:
+- **Azithromycin (macrolide)**: *mph(A)* (macrolide phosphotransferase) and *erm(B)* (ribosomal methylase) — increasingly common in *S. sonnei* lineage 3, often on ICE elements
+- **Ciprofloxacin (quinolone)**: *gyrA* mutations (S83L, D87N) + *parC* mutations — near-universal in global pandemic *S. sonnei*
+- **Ceftriaxone (beta-lactam)**: *blaCTX-M-27* and *blaCTX-M-15* — emerging in XDR clades
+- **Trimethoprim + sulfonamide**: *dfrA* + *sul* genes — historically very common; often chromosomally integrated via class 1 integrons
+
+---
+
+### 7. PlasmidFinder
+
+**Database**: `enterobacteriaceae`  
+**Output column**: `plasmidfinder_replicons`
+
+*Shigella* plasmid content beyond pINV:
+- **Col156**: cryptic small plasmid ubiquitous in *S. sonnei* ST152 pandemic clade (present in ~100% of pandemic isolates; lineage marker)
+- **IncFII**: carries resistance genes in some lineages
+- **IncI1**: broad host range; occasional ESBL carrier
+
+pINV itself is a large (~214 kb) plasmid but its replicon is not reliably detected by PlasmidFinder — use the pINV screen (column `pinv_present`) to confirm its presence.
+
+
+---
+
+
+# Output Figures
+
+
+## Fig 1 — Population Summary
+
+Fig 1 is a four-panel overview of the population structure and resistance landscape for a single species run. It is the first figure produced and is designed to give a rapid, high-level picture of who is in your dataset before diving into the gene-level and phylogenetic detail.
+
+---
+
+### Layout
+
+```
+┌─────────────────────┬─────────────────────┐
+│  A. MLST STs        │  B. Serotypes / IS  │
+├─────────────────────┼─────────────────────┤
+│  C. AMR prevalence  │  D. MDR burden      │
+└─────────────────────┴─────────────────────┘
+```
+
+---
+
+### Panel A — MLST sequence types
+
+A horizontal bar chart of the top 15 most common MLST sequence types (STs) by isolate count. STs beyond the top 15 are pooled into "Other"; isolates with no ST prediction are labelled "Unknown".
+
+#### How bars are filled (species-specific)
+
+**E. coli**: Each bar is stacked by Clermont phylogroup. If `clermont_phylogroup` is present in the results TSV, those assignments are used directly. If not, phylogroup is inferred from a curated ST → phylogroup lookup table. The title notes which approach was used ("(Clermont)" vs "(ST-inferred)").
+
+| Phylogroup colour | Phylogroup |
+|---|---|
+| Blue | A |
+| Green | B1 |
+| Orange | B2 |
+| Teal | C |
+| Red | D |
+| Purple | E |
+| Pink | F |
+| Grey | Unknown |
+
+**Salmonella**: Bars are filled with a single-hue gradient (darker = more common ST). No stacking — the equivalent stratification is by serovar, shown in Panel B.
+
+**Shigella**: Bars are stacked by *Shigella* species (*S. sonnei*, *S. flexneri*, *S. boydii*, *S. dysenteriae*).
+
+#### Interpreting Panel A
+
+- **Dominant ST**: A single very tall bar indicates a clonal outbreak or collection enriched for one lineage. Multiple STs of roughly equal height suggests a diverse, community-level sample.
+- **Phylogroup composition** (E. coli): B2 dominates extra-intestinal pathogenic *E. coli* (ExPEC); B1 is more common in commensal and livestock isolates; A is ubiquitous across niches.
+- **"Other" is large**: Your dataset contains many rare STs. This is common in community surveillance; not a quality issue.
+- **"Unknown" is large**: MLST failed for many samples. Common causes: highly fragmented assemblies (< 4 MLST alleles found), novel alleles, or contaminated assemblies.
+
+---
+
+### Panel B — Serotypes / IS element landscape
+
+The content of Panel B differs by species.
+
+#### E. coli: O:H serotypes (ECTyper)
+
+Top 15 O:H serotype combinations (e.g. O25:H4), stacked by K-locus group (G1–G4) when Kaptive K-locus data are available in the results TSV.
+
+| K-group colour | Group |
+|---|---|
+| Blue | G1 |
+| Orange | G2 |
+| Green | G3 |
+| Red | G4 |
+| Purple | G1/G4 overlap |
+| Grey | Unknown |
+
+**K-locus groups** are broad structural groupings of capsule loci relevant to virulence and vaccine design. G1 and G4 groups are associated with ExPEC and neonatal meningitis isolates respectively.
+
+#### Salmonella: Serovars (SISTR)
+
+Top 15 serovars by isolate count, stacked by MLST ST when available. This lets you see whether a given serovar (e.g. Typhimurium) is composed of a single dominant ST or multiple lineages.
+
+#### Shigella: IS element landscape (copy number heatmap)
+
+A compact matrix with samples as rows and IS element families as columns. Cell values are copy numbers (number of IS element insertions per genome); darker = more copies. Samples are sorted by *Shigella* species and serotype.
+
+Tracked IS element families include IS*1*, IS*2*, IS*4*, IS*66*, IS*100*, IS*200/605*, IS*256*, IS*630*, IS*3*, IS*21*, IS*5*, IS*110*, IS*1595*, IS*481*, and IS*91*.
+
+IS elements are central to *Shigella* evolution: IS*600* and IS*1* contribute to pathoadaptation by disrupting genes (e.g. *cadA*, *ompT*) that are incompatible with intracellular lifestyle. IS*1* and IS*4* expansions can mark specific epidemic lineages.
+
+---
+
+### Panel C — AMR drug class prevalence
+
+A stacked horizontal bar chart where each bar represents one clinical drug class and the bar length shows what percentage of isolates carry at least one acquired resistance gene in that class.
+
+#### Bar filling
+
+Each bar is broken into segments, one per gene (up to the top 6 genes for that class). Segment width is proportional to the percentage of isolates carrying that gene. A light grey "Other" segment captures additional genes beyond the top 6.
+
+**All genes shown are acquired genes only** (AMRrules-filtered). Intrinsic genes — such as chromosomal *blaEC* AmpC in *E. coli* — are excluded.
+
+#### Colour coding
+
+Genes are assigned colours by global prevalence rank across all drug classes (most prevalent gene = vivid red, second = steel blue, etc., cycling through 12 distinct hues). The colour assignment is consistent within a run, so the same gene always gets the same colour across all panels that show individual genes.
+
+#### Interpreting Panel C
+
+- **Bar length**: the percentage of isolates resistant to this drug class. A 50% beta-lactam bar means half your isolates carry an acquired beta-lactam resistance gene.
+- **Segment widths**: which specific genes are driving resistance in each class. A broad single-gene segment (e.g. *bla*TEM-1 filling the entire beta-lactam bar) means one gene dominates. Multiple narrow segments mean gene diversity within the class.
+- **Classes absent from the chart**: no isolate had a detected acquired gene in that class — not necessarily true susceptibility (phenotypic testing may still detect resistance via mechanisms not in the AMRFinder database).
+
+---
+
+### Panel D — MDR burden
+
+A histogram where the x-axis is the number of drug classes with acquired resistance per isolate and the y-axis is the number of isolates. A dashed vertical line marks the mean number of resistant classes.
+
+#### Colour coding
+
+- **Red bars** (x ≥ 3): MDR isolates
+- **Blue bars** (x < 3): non-MDR isolates
+
+The MDR threshold of ≥ 3 drug classes follows WHO/ECDC definitions. See [AMR Classification](AMR-Classification.md) for details.
+
+#### Interpreting Panel D
+
+- A bimodal distribution (spike at 0, another at 4–6) indicates a population with a distinct MDR subgroup, often a single successful clone.
+- A unimodal peak at 0–1 is typical for commensal collections or low-resistance settings.
+- A long tail to the right (isolates with 8+ classes) suggests extensively drug-resistant (XDR) isolates are present.
+- The mean is a single-number summary of the resistance burden of your collection as a whole.
+
+
+---
+
+
+## Fig 2 — Phylogeny and AMR
+
+Fig 2 is the annotated phylogenetic tree: it places every isolate in its evolutionary context and overlays virulence and AMR gene presence/absence as coloured heatmap panels. It is the figure that most directly answers the question "which lineages carry resistance and virulence genes, and do they cluster together?"
+
+---
+
+### Layout (left to right)
+
+```
+Phylogenetic tree  |  ST strip  |  PG strip*  |  Virulence heatmap  |  AMR genes heatmap
+```
+
+\* Phylogroup (PG) strip is present for *E. coli* only.
+
+---
+
+### The phylogenetic tree
+
+The tree is drawn from the IQ-TREE 2 midpoint-rooted Newick file (see [SNP Phylogenetics](SNP-Phylogenetics.md) for how it is constructed). Branch lengths represent substitutions per site in the SKA2 SNP alignment.
+
+- Branches are drawn in dark grey (#333333) with uniform line weight
+- A scale bar at the top left gives the branch length in substitutions per site
+- If ≤ 60 isolates are present, tip labels (sample names) are shown in monospace font
+- If > 60 isolates, tip labels are omitted to avoid overlap; use the heatmap panels to identify samples
+
+#### Reading the tree
+
+- **Branch length**: longer branches = more SNP divergence from the ancestor. Very long branches on one or two isolates often indicate contamination or mislabelling.
+- **Topology**: closely clustered tips share recent common ancestry (same lineage or outbreak cluster). Dispersed identical-coloured ST strips indicate polyphyletic origins.
+- **Scale bar**: helps interpret whether apparent clustering reflects true phylogenetic proximity. For context, within-outbreak isolates typically have branch lengths of 0–20 SNPs (see [SNP Phylogenetics](SNP-Phylogenetics.md)).
+
+---
+
+### ST strip
+
+A single column of coloured rectangles, one per tip, showing the MLST sequence type. Each ST gets a unique colour drawn from a 12-colour qualitative palette; when > 12 STs are present the palette cycles. An ST legend is placed at the bottom of the figure.
+
+**What to look for**: ST colour blocks that coincide with subtrees (clades) indicate clonal expansion. ST colour blocks scattered across unrelated clades indicate the same ST has been assigned to genomically distant isolates — uncommon but possible when the MLST scheme has low resolution for that lineage.
+
+---
+
+### Phylogroup strip (*E. coli* only)
+
+A second thin column showing the Clermont phylogroup, using the canonical colour scheme:
+
+| Colour | Phylogroup |
+|---|---|
+| Blue (#4e79a7) | A |
+| Green (#59a14f) | B1 |
+| Orange (#f28e2b) | B2 |
+| Teal (#76b7b2) | C |
+| Red (#e15759) | D |
+| Purple (#b07aa1) | E |
+| Pink (#ff9da7) | F |
+| Grey (#bab0ac) | Unknown |
+
+Phylogroup is taken from `clermont_phylogroup` in the results TSV (EzClermont output) when available; otherwise from a curated ST → phylogroup lookup.
+
+**What to look for**: phylogroups should be largely consistent within major clades (because phylogroup and MLST reflect the same underlying phylogeny). Phylogroup inconsistencies within a clade can indicate recombination events or errors in phylogroup calling.
+
+---
+
+### Virulence heatmap
+
+A binary heatmap (teal = present, light grey = absent) showing virulence determinants. The exact columns shown depend on the species.
+
+#### *E. coli* virulence columns
+
+Sources used (in order of priority):
+
+1. **Kleborate virulence determinants** — columns include: Stx1, Stx2, eae (intimin), ipaH, LT (heat-labile enterotoxin), ST-toxin (heat-stable enterotoxin). Only columns where at least one isolate is positive are shown.
+2. **AMRFinder virulence genes** — up to 12 of the most prevalent virulence-associated genes reported by AMRFinder Plus under the `--plus` flag (e.g. *hlyA*, *cnf1*, *papA*, *sat*, *iutA*). Shown in addition to Kleborate columns.
+
+#### *Salmonella* virulence columns
+
+AMRFinder virulence genes only (top 12 by prevalence across the dataset).
+
+#### *Shigella* virulence columns
+
+1. ShigEiFinder outputs: ipaH status, virulence plasmid classification
+2. pINV screen result
+3. AMRFinder virulence genes (top 12)
+
+#### Column labels
+
+Each column label shows the gene or marker name and, in parentheses, the percentage of isolates that are positive. Labels are in italic and rotated 40°.
+
+---
+
+### AMR genes heatmap
+
+A binary heatmap (red = present, light grey = absent) showing the top 20 acquired AMR genes by prevalence across the dataset. Genes are ordered by drug class (highest-burden class leftmost), with drug class brackets and labels below the column names.
+
+**Only acquired genes are shown** — intrinsic genes excluded by AMRrules (see [AMR Classification](AMR-Classification.md)).
+
+#### Reading the AMR heatmap
+
+- A solid red vertical stripe means that gene is nearly universal in the dataset.
+- A gene confined to a tight clade on the tree means it was acquired once and transmitted clonally; the same tree topology will be visible as a red block coinciding with a monophyletic group.
+- A gene scattered across unrelated lineages means it has been acquired multiple times, suggesting a mobile element is circulating. Confirm by checking Fig 4 for a plasmid replicon co-occurring at similar prevalence.
+- Comparing the virulence and AMR panels side by side shows whether virulence and resistance are co-selected in the same isolates.
+
+#### Drug class brackets
+
+Below the gene tick labels, drug class names are shown with a bracket spanning all genes in that class. Classes are ordered by total prevalence (highest leftmost). This groups related resistance determinants (e.g. all beta-lactamases together) for easier visual parsing.
+
+---
+
+### When Fig 2 is not produced
+
+Fig 2 requires a phylogenetic tree, which in turn requires ≥ 3 samples. If the species has fewer than 3 samples, or if `--skip_local_phylo` was passed, Fig 2 is skipped and a note is written to the pipeline log.
+
+---
+
+### Legend
+
+The full figure has two legend areas:
+
+- **Lower-left of tree panel**: phylogroup colours (E. coli) + virulence present/absent swatches + AMR present/absent swatches
+- **Bottom centre of figure**: ST colour legend (multi-column, all observed STs)
+
+
+---
+
+
+## Fig 3 — AMR Genes
+
+Fig 3 is a horizontal bar chart of the top 25 most prevalent acquired AMR genes and point mutations across all isolates of the species. It is the gene-level complement to the drug-class view in Fig 1 Panel C, and provides the most granular view of resistance determinants in your dataset.
+
+---
+
+### What is shown
+
+Each bar represents one AMR gene or chromosomal point mutation. Bar length is the percentage of isolates that carry that gene. Bars are sorted from most to least prevalent (top to bottom).
+
+The figure shows up to the top 25 genes by prevalence. If fewer than 25 distinct acquired genes are detected across the whole dataset, all are shown.
+
+---
+
+### Colour coding
+
+| Colour | Meaning |
+|---|---|
+| Blue (#4e79a7) | Acquired gene (horizontally transferred resistance gene) |
+| Light blue (#aec6cf) | Chromosomal point mutation |
+
+Point mutations are distinguished from acquired genes by their name format: a point mutation is reported by AMRFinder as `geneName_X99Y` — a base gene name, underscore, then an amino acid substitution in the form (reference)(position)(alternate). For example, `gyrA_S83L` is a serine-to-leucine substitution at position 83 of GyrA, conferring fluoroquinolone resistance.
+
+---
+
+### Data source
+
+Genes are taken from the `amrfinder_acquired_genes` column in the results TSV — the AMRrules-filtered list of acquired resistance determinants only. Intrinsic chromosomal genes (e.g. *blaEC*, efflux pump subunits) are excluded.
+
+---
+
+### Interpreting the figure
+
+#### Gene name conventions
+
+AMRFinder uses the NCBI AMR gene nomenclature:
+
+- `bla` prefix = beta-lactamase (e.g. *bla*TEM-1, *bla*CTX-M-15, *bla*OXA-48)
+- `aac`, `aph`, `ant` = aminoglycoside-modifying enzymes
+- `tet` = tetracycline resistance gene
+- `mcr` = mobile colistin resistance
+- `qnr` = quinolone resistance (plasmid-mediated)
+- `sul` = sulfonamide resistance
+- `dfrA` = trimethoprim resistance (dihydrofolate reductase)
+- `cat`, `cml` = chloramphenicol/phenicol resistance
+- `mph`, `erm` = macrolide resistance
+- Point mutations: `gyrA_*`, `parC_*` = fluoroquinolone; `pmrA_*`, `mgrB_*` = colistin
+
+#### Common patterns
+
+**High *bla*TEM-1 prevalence**: TEM-1 is the most common plasmid-mediated beta-lactamase globally. It confers ampicillin resistance but is typically not an ESBL (does not hydrolyse cephalosporins). Very common in *E. coli* and *Salmonella*.
+
+**CTX-M genes**: Extended-spectrum beta-lactamases (ESBLs) that hydrolyse third-generation cephalosporins. CTX-M-15 is the dominant ESBL globally; CTX-M-27 is common in *E. coli* ST131. If a CTX-M gene is present, check Fig 4 for IncF plasmids — these are the most common CTX-M carriers.
+
+**gyrA/parC mutations**: Quinolone resistance via chromosomal mutations. Often co-selected with other resistance — isolates with multiple quinolone mutations (e.g. *gyrA* S83L + D87N + *parC* S80I) typically have high-level fluoroquinolone resistance.
+
+**mcr genes**: Plasmid-mediated colistin resistance. Even at low prevalence, warrants attention as colistin is a last-resort agent. Cross-reference Fig 4 for IncX4 or IncI2 plasmids (the main *mcr-1* and *mcr-2* carriers).
+
+**aac(6')-Ib-cr**: Aminoglycoside-acetyltransferase variant that also inactivates fluoroquinolones. A gene detected under the AMG class that also contributes to QNL resistance — if you see this alongside *gyrA* mutations it suggests co-selection pressure.
+
+---
+
+### Relationship to other figures
+
+| Question | Figure to check |
+|---|---|
+| Which drug classes are these genes in? | Fig 1 Panel C |
+| Are these genes phylogenetically clustered? | Fig 2 AMR heatmap |
+| Which plasmids carry these genes? | Fig 4 (long-read data) |
+| How does gene carriage vary by ST? | Fig 6 |
+| How does gene carriage vary by serovar/phylogroup? | Fig 7 |
+
+---
+
+### Output file
+
+`{prefix}_fig3_amr_genes.pdf` and `.png`
+
+
+---
+
+
+## Fig 4 — Plasmid Replicon Overview
+
+The plasmid overview figure summarises plasmid replicon diversity across all samples of a given species. Because the meaningfulness of drug-class attribution depends critically on assembly quality, the figure **automatically selects one of two layouts** based on the data. This page explains both layouts, when each is chosen, and how to interpret what you see.
+
+---
+
+### Background: replicons and plasmid detection
+
+[PlasmidFinder](https://cge.food.dtu.dk/services/PlasmidFinder/) screens each assembly for known plasmid replicon sequences. A replicon is the origin-of-replication region that defines a plasmid's incompatibility group (Inc type). The Inc type determines:
+
+- Which other plasmids the plasmid is incompatible with (cannot stably coexist in the same cell)
+- Broadly, the host range (which bacterial species can carry it)
+- Broadly, the transfer machinery available (conjugation frequency, host range of transfer)
+
+Common replicons in enteric pathogens:
+
+| Replicon family | Examples | Common associations |
+|---|---|---|
+| IncF | IncFII(S), IncFIB(S), IncFII(29) | Dominant in *E. coli* and *Salmonella*; often carry resistance |
+| IncI | IncI1 | Broad host range; common in *Salmonella* |
+| IncN | IncN | Broad host range; associated with ESBL genes |
+| IncX | IncX1, IncX3 | Carry carbapenemase and ESBL genes |
+| IncL/M | IncL/M(pOXA-48) | OXA-48 carbapenemase plasmids |
+| Col | Col156, ColRNAI | Small cryptic plasmids; Col156 is specific to *S. sonnei* pandemic clone |
+
+---
+
+### Linking replicons to AMR: the contig co-location approach
+
+The `plasmid_amr_map.py` script links replicon types to AMR genes by **contig co-location**: if a replicon sequence and an AMR gene are detected on the same contig, they are counted as co-occurring. This is the most rigorous approach because it confirms physical proximity on the same DNA molecule.
+
+#### Why this matters for short-read vs long-read assemblies
+
+| Assembly type | Plasmid contiguity | Co-location reliability |
+|---|---|---|
+| Long-read (Nanopore / PacBio) | Plasmids typically assemble as single closed contigs | High — replicon and AMR genes on same contig = same plasmid |
+| Hybrid (long + short reads) | Near-complete plasmid reconstruction | High |
+| Short-read (Illumina) only | Plasmids often fragmented across 5–50 small contigs | Low — replicon and AMR genes routinely on different contigs of the same plasmid |
+
+For short-read assemblies, the contig carrying the IncFII replicon sequence may be only a few kb long, while the AMR gene cassettes sit on separate small contigs from the same plasmid. Same-contig co-location misses this relationship entirely, even when the biology is well-established (e.g. MDR IncFII(S) plasmids in *Salmonella* Typhimurium).
+
+---
+
+### Auto-layout decision
+
+After computing same-contig co-location data, the pipeline calculates:
+
+```
+fraction = (isolates with ≥ 1 replicon-carrying contig that also has AMR)
+           ÷ (isolates with any replicon detected)
+```
+
+If this fraction is **< 10%**, the figure switches to the **simplified layout**. If ≥ 10%, the **full layout** is used.
+
+#### Decision tree
+
+```
+Compute same-contig AMR fraction
+            │
+            ├── < 10%  →  Simplified layout (2 panels)
+            │               Likely: short-read Illumina assembly
+            │               Action: show replicon prevalence by Inc family
+            │
+            └── ≥ 10%  →  Full layout (3 panels)
+                            Likely: long-read or reference-quality assembly
+                            Action: show drug-class breakdown + bubble matrix
+```
+
+---
+
+### Simplified layout (2 panels) — short-read assemblies
+
+Used when same-contig AMR co-occurrence is too sparse to be meaningful (< 10% threshold).
+
+#### Panel A — Replicon prevalence by Inc/Col family
+
+A horizontal bar chart showing the percentage of isolates that carry each replicon, with bars coloured by broad Inc/Col family:
+
+| Colour | Family | Examples |
+|---|---|---|
+| Blue | IncF | IncFII, IncFIB, IncFII(S), IncFIB(S) |
+| Orange | IncI | IncI1, IncI2 |
+| Red | IncN | IncN, IncN2 |
+| Teal | IncA/C | IncA/C, IncA/C2 |
+| Green | IncH | IncHI1, IncHI2 |
+| Yellow | IncL/M | IncL/M, IncL/M(pOXA-48) |
+| Purple | IncX | IncX1, IncX3, IncX4 |
+| Pink | IncP | IncP-1α, IncP-1β |
+| Brown | IncQ | IncQ1, IncQ2 |
+| Grey | Col | Col156, ColRNAI, Col(BS512) |
+| Light grey | Other | Unclassified or rare types |
+
+**What the bar length tells you:** prevalence (%). A replicon at 50% is carried by half of your isolates. This does not mean the AMR genes on that replicon are at the same prevalence — the replicon prevalence is a property of the plasmid backbone, not of any specific resistance cargo.
+
+**What the colour tells you:** the Inc family grouping, which correlates with plasmid biology (transfer range, incompatibility, typical gene cargo). It does *not* tell you about AMR in this layout — for that, cross-reference Fig 3 and Fig 6.
+
+#### Panel B — SNP phylogeny + plasmid heatmap
+
+The midpoint-rooted SNP tree (from IQ-TREE 2) with:
+- **ST strip** — MLST sequence type colour per tip
+- **PG strip** — Clermont phylogroup (for *E. coli*) or left blank for Salmonella/Shigella
+- **Plasmid heatmap** — one column per replicon; blue = present, white = absent
+
+This panel lets you see whether plasmid carriage is structured by phylogeny. If replicon X is confined to a single clade, the plasmid was likely acquired once and co-transmitted with the bacterial lineage. If it is scattered across unrelated clades, it has been acquired multiple times (horizontal gene transfer).
+
+---
+
+### Full layout (3 panels) — long-read or reference-quality assemblies
+
+Used when same-contig AMR co-occurrence is ≥ 10% — meaning the assemblies are contiguous enough that co-location data is biologically meaningful.
+
+#### Panel A — Replicon prevalence by drug class
+
+As for the simplified layout but now each bar is stacked by the AMR drug class found on that replicon type. Each isolate carrying a given replicon is assigned to exactly one drug class segment (the highest-priority class found on the replicon-carrying contig), so segments sum to total replicon prevalence without double-counting.
+
+**Priority order** (highest to lowest): BETA-LACTAM → QUINOLONE → COLISTIN → AMINOGLYCOSIDE → TETRACYCLINE → MACROLIDE → PHENICOL → SULFONAMIDE → TRIMETHOPRIM → FOSFOMYCIN → STREPTOTHRICIN → NITROFURAN → No AMR
+
+Grey ("No AMR") means the replicon was detected but no acquired AMR gene was on the same contig.
+
+#### Panel B — Bubble matrix of replicon–AMR co-occurrence
+
+A grid with replicons on the y-axis and drug classes on the x-axis. Each bubble represents a (replicon, drug class) combination:
+- **Bubble size** — proportional to the square root of the percentage of isolates carrying both the replicon and that drug class (area ∝ percentage)
+- **Bubble colour** — drug class
+- **Number inside** — percentage of isolates (shown when ≥ 5%)
+- **No bubble** — no isolate has both that replicon and that drug class on the same contig
+
+#### Panel C — SNP phylogeny + plasmid heatmap
+
+Same as Panel B in the simplified layout.
+
+---
+
+### Common interpretation questions
+
+**"Why does a well-known MDR plasmid type (e.g. IncFII) show No AMR in the bars?"**
+
+Almost certainly an assembly fragmentation issue. Switch to the simplified layout interpretation: the replicon prevalence bar tells you the plasmid backbone is there, but the AMR cargo assessment requires long-read data. See Fig 3 for AMR gene prevalence independently of plasmid attribution.
+
+**"What does it mean when a replicon is at 100% prevalence?"**
+
+The replicon is present in every isolate. This can mean:
+- A highly conserved plasmid that co-evolved with this lineage (common for Col-type replicons)
+- A large virulence plasmid carried by all isolates (e.g. pINV in *Shigella*)
+- A chromosome-integrated plasmid sequence (rare but possible)
+
+**"Why is Col156 at 100% in *S. sonnei*?"**
+
+Col156 is the replicon of a small cryptic plasmid that is ubiquitous in the global pandemic *S. sonnei* ST152 lineage. Its presence is a lineage marker as much as a plasmid marker.
+
+**"IncL/M(pOXA-48) appeared in my Salmonella dataset — should I be alarmed?"**
+
+Yes, this warrants attention. IncL/M(pOXA-48) is the plasmid backbone associated with OXA-48-type carbapenemase genes. However, confirm by checking the AMRFinder results for `blaOXA-48` or related genes — the replicon alone does not prove carbapenemase carriage.
+
+
+---
+
+
+## Fig 5 — Virulence Profiling
+
+Fig 5 summarises virulence gene carriage across isolates. The figure layout differs by species because the biology of virulence differs substantially between *E. coli*, *Salmonella*, and *Shigella*.
+
+---
+
+### *E. coli* — three-panel layout
+
+Fig 5 for *E. coli* has up to three panels depending on which virulence data are available in the results TSV.
+
+#### Panel A — Pathotype distribution (Kleborate)
+
+A horizontal bar chart showing the number of isolates assigned to each diarrhoeagenic *E. coli* pathotype, as classified by Kleborate from the `kleborate_pathovar` column.
+
+| Colour | Pathotype | Defining marker(s) |
+|---|---|---|
+| Dark red | EHEC | Stx + eae (intimin) |
+| Red | STEC | Stx without eae |
+| Orange | EPEC | eae without Stx |
+| Purple | EIEC | ipaH (invasion plasmid antigen H) |
+| Blue | ETEC | LT and/or ST enterotoxin |
+| Grey | ExPEC | None of the above; presumed extra-intestinal pathogen |
+
+Note: some isolates may carry multiple markers (e.g. Stx + LT) producing compound calls separated by `/`. Each component pathotype is counted independently.
+
+**Isolates labelled "ExPEC"** carry none of the defined diarrhoeagenic markers but may still carry ExPEC virulence determinants (iron acquisition, toxins, adhesins) — these are shown in the AMRFinder panel (Panel C).
+
+#### Panel B — InPEC virulence marker prevalence (Kleborate)
+
+A dot-plot showing the percentage of isolates with each intestinal pathogenic *E. coli* (InPEC) marker. Only markers present in at least one isolate are shown.
+
+| Marker | Pathotype association | Notes |
+|---|---|---|
+| Stx1 | STEC / EHEC | Heat-stable Shiga toxins; renal damage |
+| Stx2 | STEC / EHEC | More strongly associated with HUS than Stx1 |
+| eae | EPEC / EHEC | Intimin; required for attaching-and-effacing lesion |
+| ipaH | EIEC | Invasion plasmid antigen H; crosses epithelium |
+| LT | ETEC | Heat-labile cholera-like toxin |
+| ST-toxin | ETEC | Heat-stable toxin |
+
+#### Panel C — AMRFinder virulence genes
+
+A horizontal bar chart of the top 25 most prevalent virulence-associated genes detected by AMRFinder Plus (`--plus` flag), from the `amrfinder_virulence_genes` column.
+
+These include ExPEC virulence factors that Kleborate does not specifically classify:
+- Iron acquisition: *iutA* (aerobactin receptor), *fyuA* (yersiniabactin receptor), *iucABCD* (aerobactin synthesis)
+- Toxins: *hlyA* (alpha-haemolysin), *cnf1* (cytotoxic necrotising factor), *sat* (secreted autotransporter toxin)
+- Adhesins: *papA/papC* (P fimbriae), *afa*, *sfa*
+- Protectins: *kpsMII*, *traT* (serum resistance)
+
+---
+
+### *Salmonella* — single-panel layout
+
+A horizontal bar chart of the top 25 most prevalent virulence genes, sourced from:
+1. Abricate VFDB results (`abricate_vfdb_genes`) when available
+2. AMRFinder virulence genes as fallback
+
+For *Salmonella*, the most epidemiologically relevant virulence features are typically the presence of pathogenicity islands (SPI-1 to SPI-6) and plasmid-encoded virulence genes. These are reported by VFDB but are often present in virtually all isolates (near-100% prevalence). The figure therefore functions primarily as a confirmation that expected virulence genes are present and to flag any unusual patterns.
+
+**Note**: VFDB-based virulence gene detection for *Salmonella* is less standardised than for *E. coli*, and the informative content of Fig 5 for *Salmonella* is more limited. The species-level comparison (which serovar/ST carries which additional factors) is better addressed by custom analysis of the raw AMRFinder TSV.
+
+---
+
+### *Shigella* — Fig 5 is redirected
+
+For *Shigella*, the virulence profiling is handled by the dedicated *Shigella*-specific figures:
+- Invasion gene and IS element details are in [Fig 9 — Shigella Virulence Features](Shigella-Specific-Figures.md)
+- Serotype composition is in [Fig 8 — Shigella Serotypes](Shigella-Specific-Figures.md)
+
+Fig 5 is therefore not produced for *Shigella* runs.
+
+---
+
+### Output file
+
+`{prefix}_fig5_virulence.pdf` and `.png`
+
+
+---
+
+
+## Fig 6 — AMR by Sequence Type
+
+Fig 6 is an AMRnet-style tile heatmap showing the percentage of isolates carrying acquired resistance in each drug class, broken down by MLST sequence type. It is the primary figure for understanding which lineages drive resistance in your dataset.
+
+---
+
+### What is shown
+
+A grid with:
+- **Rows** — the top 12 most common MLST sequence types (STs) by isolate count, plus "Unknown" if present. Sample counts are shown in the row label (e.g. "ST131  (n=47)").
+- **Columns** — all drug classes with any detected acquired resistance, sorted by overall prevalence (highest prevalence = leftmost column). Drug class abbreviations follow the [AMR Classification](AMR-Classification.md) table (BLA, AMG, SUL, etc.).
+- **Tiles** — the percentage of isolates in that ST that carry acquired resistance to that drug class.
+
+---
+
+### Colour scale
+
+The colour scale mirrors the AMRnet tool used by WHO/GLASS:
+
+| Tile colour | Prevalence |
+|---|---|
+| Mid-grey | 0% — no resistance detected in this ST |
+| Cream / pale yellow | 1–25% |
+| Orange | ~50% |
+| Dark red | ~75–80% |
+| Dark red/purple | 100% |
+
+The percentage is printed inside tiles where non-zero. Values ≥ 1% are rounded to the nearest integer; values between 0 and 1% are shown to one decimal place.
+
+---
+
+### Reading the figure
+
+**A uniformly grey row**: the ST has no detected acquired resistance in any class. This is biologically possible (e.g. a truly susceptible lineage) but may also reflect a small sample size for that ST — check the n count.
+
+**A uniformly dark row**: the ST is broadly MDR, with high resistance prevalence across many classes. ST131 in *E. coli* (ESBL + aminoglycoside + fluoroquinolone) and ST313 in *S.* Typhimurium (multidrug resistant African isolates) are canonical examples.
+
+**A column with one very dark tile and all others grey or light**: a specific ST drives resistance to that drug class, with other STs showing low prevalence. This pattern suggests clonal dissemination of a resistance determinant in that lineage.
+
+**All tiles in a column are light to moderate**: the resistance is distributed across multiple STs, suggesting the resistance gene is on mobile elements circulating across lineages rather than being clonally disseminated.
+
+---
+
+### Important caveats
+
+#### Sample size per ST
+
+Each row tile represents 100% × (resistant isolates in that ST / total isolates in that ST). For an ST with n=2, one resistant isolate gives 50% and two gives 100%. Always read the n= label in the row name before interpreting a tile value.
+
+#### Missing STs
+
+Only the top 12 STs are shown. STs not in the top 12 are excluded from this figure regardless of their resistance profile. To investigate resistance in rare STs, use the raw TSV.
+
+#### Drug classes shown
+
+EFFLUX is excluded from all AMRnet figures. Classes with zero prevalence across all isolates are also omitted (empty columns add no information).
+
+---
+
+### Output file
+
+`{prefix}_fig6_amr_by_st.pdf` and `.png`
+
+
+---
+
+
+## Fig 7 — AMR by Serovar / Phylogroup
+
+Fig 7 is a second AMRnet-style tile heatmap, using the same colour scale and tile format as [Fig 6](Fig6-AMR-by-ST.md), but stratified by a biologically meaningful grouping that differs by species.
+
+---
+
+### Rows by species
+
+| Species | Row grouping | Source column |
+|---|---|---|
+| *E. coli* | Clermont phylogroup | `clermont_phylogroup` |
+| *Salmonella enterica* | Serovar | `sistr_serovar` (SISTR) |
+| *Shigella* spp. | Serotype, or species if serotypes unavailable | `shigeifinder_serotype` |
+
+#### *E. coli*: Clermont phylogroups
+
+Rows are the Clermont phylogroups (A, B1, B2, C, D, E, F) present in the dataset, plus Unknown. Up to 10 rows shown.
+
+Phylogroup is a coarser grouping than ST but captures the major ecological and clinical niches:
+
+- **B2**: ExPEC — urinary tract infections, bacteraemia, neonatal meningitis; dominates clinical settings in high-income countries
+- **A**: ubiquitous commensal; many broad-host-range plasmids circulate
+- **B1**: livestock and environmental; many produce ESBL in zoonotic contexts
+- **D**: clinical; ST131 and other fluoroquinolone-resistant clones
+- **C/E**: rarer; C includes ST410 (carbapenem-resistant lineage)
+
+#### *Salmonella*: Serovars
+
+Top 15 serovars by isolate count. Salmonella resistance is strongly serovar-associated:
+
+- **Typhimurium** / **I 4,[5],12:i:-** (monophasic Typhimurium): MDR common via DT104 chromosomal cassette or IncFII plasmids
+- **Enteritidis**: often more susceptible, but increasing ESBLs in some regions
+- **Kentucky**: globally disseminated fluoroquinolone-resistant lineage
+- **Typhi**: azithromycin (macrolide) resistance — monitor MAC column
+
+#### *Shigella*: Serotypes or species
+
+If ShigEiFinder serotype calls are available, the top 15 serotypes are used as rows. If serotype calls are absent (all NA), rows fall back to species-level grouping (*S. sonnei*, *S. flexneri*, *S. boydii*, *S. dysenteriae*).
+
+---
+
+### Columns
+
+Drug classes sorted by overall prevalence (same logic as Fig 6). EFFLUX excluded.
+
+---
+
+### Interpreting Fig 7 vs Fig 6
+
+Figs 6 and 7 answer complementary questions:
+
+| Question | Fig 6 (by ST) | Fig 7 (by group) |
+|---|---|---|
+| Which lineage drives resistance? | Yes — ST-level resolution | No — coarser grouping |
+| Is resistance serovar/phylogroup-wide or ST-specific? | Partially (multiple STs per serovar visible only in raw data) | Yes — shows group-level picture |
+| Are all isolates of serovar X resistant to Y? | Not directly | Yes |
+| How does my commensal collection compare to clinical? | No | Yes (by phylogroup) |
+
+Use both figures together: if a drug class tile is dark in Fig 7 but the same class shows dark tiles only in one or two STs in Fig 6, resistance is concentrated in specific clones within that group. If multiple STs show dark tiles in Fig 6, resistance is lineage-independent (likely a mobile element).
+
+---
+
+### Output file
+
+`{prefix}_fig7_amr_by_group.pdf` and `.png`
+
+
+---
+
+
+## Shigella-Specific Figures
+
+In addition to the standard Figs 1–7, *Shigella* runs produce two additional figures (Figs 8 and 9) that capture aspects of *Shigella* biology not addressed by the cross-species framework: serotype composition and the invasion/IS element feature landscape.
+
+---
+
+### Background: why Shigella needs dedicated figures
+
+*Shigella* species (*S. sonnei*, *S. flexneri*, *S. boydii*, *S. dysenteriae*) are phylogenetically embedded within *E. coli*, but their clinical presentation, typing scheme, and genomic features differ substantially:
+
+- Typing is by **serotype** (O-antigen serotype for *S. flexneri*; biotype for *S. sonnei*) rather than by sequence type alone
+- The **virulence plasmid (pINV)** is the primary determinant of pathogenicity — its presence and invasion gene complement are clinically important
+- **IS element content** differs markedly between species and can distinguish epidemic lineages (e.g. IS*600* expansion in *S. sonnei* pandemic clade)
+- MDR in *S. sonnei* is increasingly driven by integrative conjugative elements (ICEs) rather than plasmids
+
+---
+
+### Fig 8 — Shigella Serotype Composition
+
+A horizontal stacked bar chart showing the number of isolates per *Shigella* species (one bar per species), stacked by serotype (ShigEiFinder).
+
+#### Species identification
+
+Species is inferred in this priority order:
+
+1. ShigEiFinder serotype prefix: `SF` = *S. flexneri*, `SS`/SONNEI = *S. sonnei*, `SB` = *S. boydii*, `SD` = *S. dysenteriae*
+2. ShigEiFinder cluster / serotype field (keyword matching)
+3. Mykrobe lineage: lineage3 = *S. sonnei* pandemic
+
+#### Serotype colours
+
+Each serotype is assigned a colour from the matplotlib `tab20` palette. The total n is shown to the right of each bar.
+
+#### Interpreting Fig 8
+
+- **Dominant *S. sonnei*** with one serotype bar: typical of a single-strain or clonal epidemic; common in many LMICs where the pandemic lineage ST152 dominates.
+- **Diverse *S. flexneri* serotypes**: multiple serotypes within *S. flexneri* indicate diverse circulating strains; can complicate vaccine efficacy assessment since candidate vaccines (e.g. Shigella flexneri 2a-based) may not cover all circulating serotypes.
+- **Presence of *S. dysenteriae* type 1**: historically the cause of epidemic dysentery; carriage of Stx genes; any Sd1 isolates warrant immediate attention.
+
+---
+
+### Fig 9 — Shigella Virulence and Invasion Feature Panel
+
+A binary presence/absence heatmap with samples as rows and virulence/invasion features as columns. Samples are sorted by species, then serotype, then sample name.
+
+A dark red species colour strip to the left of the heatmap marks which species each sample belongs to.
+
+#### Column groups
+
+The columns are divided into three bracketed groups:
+
+##### 1. ShigEiFinder markers
+
+| Column | Description |
+|---|---|
+| ipaH | Invasion plasmid antigen H — the gold standard PCR target for Shigella/EIEC; present on pINV |
+| Vir. plasmid | ShigEiFinder's classification of whether a virulence plasmid is detected |
+
+**ipaH** is the single most important diagnostic marker: it is present on the virulence plasmid of essentially all pathogenic *Shigella* and is absent from commensal *E. coli*. An isolate typed as *Shigella* but lacking ipaH may have lost its virulence plasmid (plasmid-cured strains exist) or be a misclassification.
+
+##### 2. pINV invasion genes
+
+| Gene | Protein | Function |
+|---|---|---|
+| icsA / virG | IcsA/VirG | Surface-exposed autotransporter; enables actin-based motility |
+| virF | VirF | AraC-family transcription factor; master virulence regulator |
+| virB | VirB | Transcriptional activator; activated by VirF |
+| ipaB | IpaB | Type III secretion effector; pore-forming; triggers macrophage apoptosis |
+| ipaC | IpaC | Type III secretion effector; membrane insertion |
+| ipaD | IpaD | Needle tip protein; controls effector secretion |
+
+All six genes should be present in a complete, functional pINV plasmid. Isolates missing one or more genes may have undergone partial plasmid deletions, which is associated with attenuated virulence.
+
+##### 3. IS element presence
+
+Binary presence of individual IS element families:
+
+| Element | Significance |
+|---|---|
+| IS1 | Ubiquitous; present in multiple copies across Shigella species |
+| IS1A | IS1 variant |
+| IS30 | Common in Shigella; associated with gene disruption events |
+| IS186 | Detected in S. sonnei and S. flexneri |
+| IS600 | High copy number in S. sonnei pandemic clade; lineage marker |
+| IS629 | Associated with O-antigen modification in S. flexneri |
+
+A simple binary (present/absent) is shown here; for copy-number detail, refer to Fig 1 Panel B (IS element landscape heatmap) which shows copy numbers.
+
+#### Interpreting Fig 9
+
+**All pINV genes present + ipaH present**: fully invasive strain with intact virulence plasmid.
+
+**ipaH present but icsA/virG absent**: pINV is present but icsA has been disrupted — common in clinical passaged or attenuated derivatives.
+
+**ipaH absent in an otherwise *Shigella*-typed isolate**: virulence plasmid may have been cured during laboratory passage. Treat with caution; may not be pathogenic.
+
+**IS600 in high copy number (Fig 1B) + SS serotype**: hallmark of the global *S. sonnei* pandemic lineage (ST152). High IS600 copy number is not associated with specific virulence or resistance per se, but is a strong lineage marker.
+
+---
+
+### Output files
+
+- `{prefix}_fig8_shigella_serotypes.pdf` and `.png`
+- `{prefix}_fig9_shigella_features.pdf` and `.png`
+
+
+---
+
+
+## SNP Distance Heatmap
+
+The SNP distance heatmap visualises pairwise whole-genome SNP distances between all isolates of a species as a clustered square matrix. It is produced alongside the phylogenetic tree and complements it by giving exact numerical distances where the tree gives topological relationships.
+
+---
+
+### What is shown
+
+A symmetric n × n matrix where:
+- Each row and column is one isolate
+- Cell colour encodes the pairwise SNP distance: **white/pale blue = close; dark blue = distant**
+- The colour scale runs from 0 to the 95th percentile of non-zero distances (to prevent outliers from compressing the useful colour range)
+- A colour bar on the right side shows the mapping from colour to SNP count
+
+Rows and columns are reordered by **average-linkage hierarchical clustering** of the distance matrix, so isolates that are closest to each other are adjacent. This brings outbreak clusters and clonal groups into visually obvious blocks.
+
+---
+
+### Scale and labels
+
+| n isolates | Labels shown |
+|---|---|
+| ≤ 200 | Sample names on both axes (font size scales down with n) |
+| > 200 | No labels; x-axis message states count and threshold |
+
+When labels are shown, x-axis labels are rotated 90° for readability.
+
+---
+
+### Interpreting the heatmap
+
+#### Dark diagonal
+
+The main diagonal is always 0 (each sample compared to itself). If the diagonal does not appear as the darkest region in each row/column, check that sample names were not duplicated.
+
+#### Off-diagonal dark blocks
+
+A dark blue square block off the diagonal indicates two groups of isolates that are all distant from each other. This is expected when the dataset contains multiple STs.
+
+#### Off-diagonal pale blocks
+
+A pale/white square block means a group of isolates that are all very close to each other — a cluster. Cross-reference these clusters with the ST strip in Fig 2 to see if they correspond to a single ST, and with the AMR heatmap to see if they share resistance genes.
+
+#### Outbreak investigation thresholds
+
+These are rough guides; appropriate thresholds depend on the organism and context:
+
+| SNP distance | Typical interpretation |
+|---|---|
+| 0–5 | Essentially identical; same strain, potentially outbreak-linked |
+| 5–20 | Probable outbreak cluster (apply species-specific guidance) |
+| 20–50 | Recent common ancestor; short-term transmission possible |
+| 50–500 | Same ST, unrelated; no transmission link implied |
+| > 500 | Different lineages or STs |
+
+**For *S.* Typhi**: thresholds are tighter; ≤ 3 SNPs is the standard cut-off for outbreak clusters in some WHO guidance.
+
+**For *Shigella sonnei***: within-clade isolates from different outbreaks can share 5–15 SNPs; use the Mykrobe sub-clade assignment alongside the SNP distance.
+
+---
+
+### Source data
+
+The heatmap is computed from the SKA2 pairwise SNP distance matrix (`ska2_snp_matrix.tsv`), which contains raw SNP counts across the whole-genome split k-mer alignment. See [SNP Phylogenetics](SNP-Phylogenetics.md) for how this matrix is produced.
+
+---
+
+### Output file
+
+`{species}_snp_heatmap.pdf` and `.png`
+
+For very large datasets (n > 200), the PNG may be large. The PDF provides vector graphics for zoom without pixelation.
+
+
+---
+
+
+# Reference
+
+
+## Output File Reference
+
+All typing results for each species are aggregated into a single tab-separated results file. This page documents every column in these files. Missing data is represented as `NA`.
+
+---
+
+### Files produced
+
+| File | Species |
+|---|---|
+| `{outdir}/ecoli_typer_results.tsv` | *E. coli* |
+| `{outdir}/salmonella_typer_results.tsv` | *Salmonella enterica* |
+| `{outdir}/shigella_typer_results.tsv` | *Shigella* spp. |
+
+---
+
+### Columns common to all species
+
+| Column | Source | Description |
+|---|---|---|
+| `sample` | Input | Sample identifier |
+| `mlst_scheme` | mlst | MLST scheme used |
+| `mlst_st` | mlst | Predicted sequence type (e.g. ST131) |
+| `mlst_st_complex` | mlst + lookup | ST complex assignment (e.g. ST131 complex) |
+| `amrfinder_acquired_genes` | AMRFinder + AMRrules | Semicolon-separated acquired AMR genes and mutations only (intrinsic excluded) |
+| `amrfinder_intrinsic_genes` | AMRFinder + AMRrules | Semicolon-separated intrinsic/wild-type genes (reference only; not in figures) |
+| `amrfinder_virulence_genes` | AMRFinder | Semicolon-separated virulence-associated genes |
+| `amrfinder_genes` | AMRFinder | Raw unfiltered gene list (all types, for reference) |
+| `amrfinder_drug_classes` | AMRFinder + AMRrules | Semicolon-separated drug class list (acquired genes only) |
+| `amrfinder_gene_classes` | AMRFinder + AMRrules | `gene=CLASS;gene2=CLASS2` mapping for acquired genes |
+| `plasmidfinder_replicons` | PlasmidFinder | Semicolon-separated replicon types detected |
+
+---
+
+### *E. coli*-specific columns
+
+| Column | Source | Description |
+|---|---|---|
+| `clermont_phylogroup` | EzClermont | Clermont phylogroup (A, B1, B2, C, D, E, F, or Unknown) |
+| `kleborate_pathovar` | Kleborate | Pathotype assignment: STEC, EPEC, ETEC, EIEC, EHEC, or `-` (ExPEC/commensal) |
+| `kleborate_Stx1` | Kleborate | Shiga toxin 1 call (subtype or `-`) |
+| `kleborate_Stx2` | Kleborate | Shiga toxin 2 call (subtype or `-`) |
+| `kleborate_eae` | Kleborate | Intimin (*eae*) call (`+` or `-`) |
+| `kleborate_ipaH` | Kleborate | ipaH call (`+` or `-`) |
+| `kleborate_LT` | Kleborate | Heat-labile toxin call (`+` or `-`) |
+| `kleborate_ST_toxin` | Kleborate | Heat-stable toxin call (`+` or `-`) |
+| `ectyper_O` | ECTyper | O antigen (e.g. O25) |
+| `ectyper_H` | ECTyper | H antigen (e.g. H4) |
+| `ectyper_serotype` | ECTyper | Combined O:H serotype (e.g. O25:H4) |
+| `ectyper_qc` | ECTyper | QC status: PASS / WARN / FAIL |
+| `ectyper_evidence` | ECTyper | Number of marker genes supporting the call |
+| `k_group` | Kaptive | K-locus group: G1, G2, G3, G4, or Unknown |
+| `k_locus` | Kaptive | K-locus designation (e.g. KL1) |
+| `k_type` | Kaptive | Antigenic K-type (e.g. K1) |
+| `k_confidence` | Kaptive | Match confidence: Perfect / Good / Low / Untypeable |
+
+#### PathogenWatch columns (*E. coli* and *Salmonella*)
+
+These columns are populated when a PathogenWatch API query is made (optional feature).
+
+| Column | Description |
+|---|---|
+| `pw_status` | PathogenWatch query status (matched / not_found) |
+| `pw_species` | Species confirmed by PathogenWatch |
+| `pw_genome_uuid` | PathogenWatch genome UUID |
+| `pw_collection_url` | URL to PathogenWatch collection |
+| `pw_cgmlst_st` | cgMLST ST assigned by PathogenWatch |
+| `pw_cluster5_count` | Number of genomes within SNP distance 5 in PathogenWatch |
+| `pw_cluster5_labels` | Sample labels within SNP distance 5 |
+| `pw_cluster10_count` | Number within SNP distance 10 |
+| `pw_cluster10_labels` | Labels within SNP distance 10 |
+| `pw_cluster20_count` | Number within SNP distance 20 |
+| `pw_cluster20_labels` | Labels within SNP distance 20 |
+| `pw_cluster50_count` | Number within SNP distance 50 |
+| `pw_cluster50_labels` | Labels within SNP distance 50 |
+| `pw_tree_available` | Whether a PathogenWatch tree is available for this genome |
+
+---
+
+### *Salmonella*-specific columns
+
+| Column | Source | Description |
+|---|---|---|
+| `sistr_serovar` | SISTR | Consensus serovar prediction (Kauffmann-White name) |
+| `sistr_serovar_antigen` | SISTR | Serovar from antigen typing method alone |
+| `sistr_serovar_cgmlst` | SISTR | Serovar from cgMLST method alone |
+| `sistr_O` | SISTR | O-antigen formula (e.g. `4,5,12`) |
+| `sistr_H1` | SISTR | Phase 1 H antigen |
+| `sistr_H2` | SISTR | Phase 2 H antigen (`-` = monophasic) |
+| `sistr_cgmlst_ST` | SISTR | cgMLST sequence type |
+| `sistr_qc` | SISTR | QC status: PASS / WARNING / FAIL |
+
+---
+
+### *Shigella*-specific columns
+
+| Column | Source | Description |
+|---|---|---|
+| `shigeifinder_ipaH` | ShigEiFinder | ipaH marker: `pos` or `neg` |
+| `shigeifinder_virulence_plasmid` | ShigEiFinder | Virulence plasmid classification |
+| `shigeifinder_cluster` | ShigEiFinder | Cluster ID |
+| `shigeifinder_serotype` | ShigEiFinder | Serotype (e.g. `SS`, `SF2a`) |
+| `shigeifinder_o_antigen` | ShigEiFinder | O-antigen |
+| `shigeifinder_h_antigen` | ShigEiFinder | H-antigen |
+| `mykrobe_genotype` | Mykrobe | Full genotype string |
+| `mykrobe_lineage` | Mykrobe | Top-level lineage (e.g. lineage3) — *S. sonnei* only |
+| `mykrobe_clade` | Mykrobe | Clade within lineage |
+| `mykrobe_subclade` | Mykrobe | Sub-clade |
+| `mykrobe_genotype_name` | Mykrobe | Human-readable genotype name |
+| `mykrobe_confidence` | Mykrobe | Confidence of genotype call |
+| `pinv_present` | pINV screen | `TRUE` if any pINV marker gene detected |
+| `pinv_genes` | pINV screen | Semicolon-separated detected pINV genes with identity/coverage |
+| `is_elements` | IS screen | IS element copy numbers: `IS1(3);IS600(12);...` |
+
+---
+
+### Parsing the semicolon-separated list columns
+
+Most multi-value columns use `;` as separator. To parse in R:
+
+```r
+library(dplyr)
+library(tidyr)
+df |>
+  separate_rows(amrfinder_acquired_genes, sep = ";") |>
+  filter(!is.na(amrfinder_acquired_genes), amrfinder_acquired_genes != "NA")
+```
+
+To parse in Python:
+
+```python
+df["amrfinder_acquired_genes"].str.split(";").explode().dropna()
+```
+
+The `amrfinder_gene_classes` column uses `=` within each semicolon-separated token (e.g. `blaOXA-1=BETA-LACTAM;aph(3'')-Ib=AMINOGLYCOSIDE`). Parse with:
+
+```python
+{g.split("=")[0]: g.split("=")[1]
+ for gene_cls in df["amrfinder_gene_classes"].dropna()
+ for g in gene_cls.split(";") if "=" in g}
+```
+
+
+---
+
+
+## Parameters
+
+All parameters can be passed on the command line as `--param_name value`. Boolean flags (like `--skip_local_phylo`) are set by simply including the flag (no value needed).
+
+---
+
+### Input / output
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--samplesheet` | `null` | Path to a two-column TSV (no header): sample name, assembly path. Use this when assembly files are in different locations. |
+| `--input_dir` | `null` | Path to a directory containing FASTA assemblies (`.fasta`, `.fa`, `.fna`, `.fas`, `.fsa`). All FASTA files in the directory are processed. |
+| `--outdir` | `results` | Output directory. Created if it does not exist. |
+
+**One of `--samplesheet` or `--input_dir` is required.**
+
+---
+
+### Assembly QC — genome size thresholds
+
+Assemblies outside the size range for their species are excluded from all typing. Size is the sum of all contig lengths.
+
+| Parameter | Default | Species |
+|---|---|---|
+| `--ecoli_min_length` | `4300000` | *E. coli* |
+| `--ecoli_max_length` | `5900000` | *E. coli* |
+| `--shigella_min_length` | `4300000` | *Shigella* |
+| `--shigella_max_length` | `5900000` | *Shigella* |
+| `--salmonella_min_length` | `4100000` | *Salmonella enterica* |
+| `--salmonella_max_length` | `6600000` | *Salmonella enterica* |
+
+See [Assembly QC](Assembly-QC.md) for why these thresholds are set where they are.
+
+---
+
+### Contamination screening (Kraken2)
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--kraken2_db` | `null` | Path to a Kraken2 database directory. When provided, each assembly is screened for secondary species contamination. Skipped when null. |
+| `--max_contamination` | `3.0` | Maximum percentage of contigs classified as a secondary species before the assembly is flagged as contaminated and excluded. |
+
+**Recommended database**: `k2_standard_08gb` (~8 GB, covers all major bacterial genera). Download from [https://benlangmead.github.io/aws-indexes/k2](https://benlangmead.github.io/aws-indexes/k2).
+
+---
+
+### Phylogenetics
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--ska2_min_samples` | `3` | Minimum number of samples per species required to run SKA2 and IQ-TREE. If fewer samples, phylogenetics is skipped for that species. |
+| `--ska2_prop_filter` | `0.95` | Core-genome filter: only SNP positions present in ≥ this fraction of samples are included in the alignment. Positions absent from many samples (e.g. due to assembly gaps) are excluded to prevent inflated distances. |
+| `--iqtree_model` | `GTR+G` | Substitution model for IQ-TREE 2. `GTR+G` is appropriate for most bacterial WGS SNP alignments. Use `MFP` to enable ModelFinder Plus (automatic model selection; slower but more rigorous). |
+| `--iqtree_bootstraps` | `1000` | Number of ultrafast bootstrap replicates (`-B`). Must be ≥ 1000 for UFBoot; lower values are clamped to 1000. |
+| `--skip_local_phylo` | `false` | Set to skip SKA2 and IQ-TREE entirely. When set, Figs 2, 4 (tree panel), and the SNP distance heatmap are not produced. |
+
+---
+
+### Resource limits
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--max_cpus` | `16` | Maximum CPU cores a single process can request. Set lower on shared machines (e.g. `--max_cpus 4`). |
+| `--max_memory` | `128.GB` | Maximum memory a single process can request. |
+
+---
+
+### Full usage example
+
+```bash
+nextflow run main.nf \
+  --input_dir /path/to/assemblies \
+  --outdir    my_results \
+  --max_cpus  8 \
+  --kraken2_db /data/k2_standard_08gb \
+  --skip_local_phylo
+```
+
+For a samplesheet:
+
+```bash
+nextflow run main.nf \
+  --samplesheet samples.tsv \
+  --outdir      my_results \
+  --iqtree_model MFP
+```
+
+Where `samples.tsv` has no header and two columns: sample name and absolute path to FASTA.
+
+---
+
+### Nextflow execution options
+
+These are Nextflow options, not pipeline parameters:
+
+| Flag | Description |
+|---|---|
+| `-profile docker` | Run tools in Docker containers |
+| `-profile conda` | Run tools in conda environments (default) |
+| `-resume` | Resume a failed run from cached results |
+| `-work-dir /path` | Change the Nextflow work directory (default: `./work`) |
+| `-N email@domain` | Send an email on run completion |
+
+
+---
+
+
+## FAQ and Troubleshooting
+
+---
+
+### Running the pipeline
+
+#### My run completed but I see no results for some samples. What happened?
+
+Check the pipeline log and the `results/species_check/` directory. Common causes:
+
+1. **Assembly failed QC** — size outside the expected range for the species. Check `results/assembly_qc/` for the fail log and the genome size of the offending sample.
+2. **Species not recognised** — Mash distance > 0.05 to all references. The sample may be a different organism entirely, a very poor-quality assembly, or a contaminated sample.
+3. **Kraken2 contamination** — if `--kraken2_db` was provided, the sample failed the secondary-species threshold. Reduce `--max_contamination` threshold or inspect the assembly.
+
+#### The pipeline runs to completion but SKA2/IQ-TREE outputs are missing
+
+Phylogenetics requires ≥ 3 samples per species (`--ska2_min_samples`). If only 1 or 2 assemblies of a given species are present, phylogenetics is silently skipped. To force a run with 2 samples, set `--ska2_min_samples 2` (not recommended — trees with 2 tips are uninformative).
+
+#### I get an error about missing conda environments
+
+Run the pipeline once with `-profile conda` to allow Nextflow to build the environments. First-time conda setup can take 15–30 minutes. Alternatively, use `-profile docker` if Docker is available.
+
+#### I see "No ST predicted" for many samples in MLST
+
+This usually means the assembly is too fragmented for the MLST allele database search to find all 7 loci. Assemblies with N50 < 10 kb or > 500 contigs commonly fail MLST. If this affects many samples, check the assembly metrics figure for the batch.
+
+---
+
+### Species identification
+
+#### An assembly I know is *E. coli* is being classified as *Shigella*
+
+*Shigella* and *E. coli* are genomically very close. If the assembly is borderline, the nearest reference may flip. Check:
+- The Mash distance output in `results/species_check/`
+- Whether the assembly carries ipaH or pINV-like sequences (true *Shigella* would)
+
+If it is genuinely *E. coli* with atypically high *Shigella* similarity (e.g. EIEC), the typing will still proceed through the *Shigella* pipeline, which will produce `shigeifinder_ipaH = pos` for EIEC. This is biologically correct — EIEC and *Shigella* share the pINV plasmid.
+
+#### *Klebsiella* samples appear in my batch but are excluded
+
+Correct behaviour. *K. pneumoniae* is detected by the Mash sketch and logged to `results/species_check/` but not typed. To type *Klebsiella*, use [Kleborate](https://github.com/klebgenomics/Kleborate) directly or a dedicated Klebsiella pipeline.
+
+---
+
+### AMR results
+
+#### Why does AMRFinder report different genes to what I expect from the phenotype?
+
+AMRFinder screens for *known* resistance mechanisms that are in its database. Novel alleles, unusual mechanisms, or genes not yet curated may be missed. Phenotypic resistance without a genotypic explanation warrants:
+1. Manual inspection of the AMRFinder output TSV in `results/amrfinder/`
+2. Checking whether the gene may be present but below the default identity/coverage thresholds
+3. Considering regulatory mutations not covered by the current AMRFinder database
+
+#### Why do some genes appear as "intrinsic" even though they are resistance genes?
+
+AMRrules classifies certain chromosomally-encoded genes as intrinsic because they are present in virtually all wild-type isolates of that species and do not represent *acquired* resistance. Examples include *blaEC* (chromosomal AmpC in *E. coli*) and constitutive efflux pumps (*acrB*, *emrD*). These are present regardless of selective pressure and are not useful resistance markers. They are retained in the `amrfinder_intrinsic_genes` column for reference.
+
+If you believe a gene classified as intrinsic in your dataset is actually meaningful (e.g. because AMRrules rules don't apply to your species context), you can use the `amrfinder_genes` (unfiltered) column for custom analysis.
+
+#### EFFLUX class is not shown in any figures
+
+Efflux-mediated resistance is excluded from all AMR figures and MDR counts. Constitutive efflux pump overexpression contributes to resistance in wild-type backgrounds and its presence is not a marker of horizontally acquired resistance. To see efflux genes, use the raw `amrfinder_genes` column.
+
+---
+
+### Plasmid results
+
+#### There are no or very few AMR genes shown in the Fig 4 bubble matrix for my E. coli / Salmonella dataset. Is something wrong?
+
+Not necessarily. If your assemblies are short-read (Illumina), plasmid fragmentation means that replicon sequences and AMR cassettes typically land on separate contigs even when they are on the same plasmid. The same-contig co-location criterion used by the pipeline correctly reflects this limitation — it does not fabricate links that don't exist in the assembly.
+
+If the same-contig fraction is below 10%, the pipeline automatically switches to the simplified 2-panel layout (replicon prevalence by Inc family + tree heatmap), which is appropriate for short-read data. See [Fig 4 — Plasmid Overview](Fig4-Plasmid-Overview.md) for full explanation.
+
+For reliable plasmid-AMR attribution, use long-read or hybrid assemblies.
+
+#### A replicon is at 100% prevalence in my dataset
+
+This is real. Common causes:
+- **Col-type small cryptic plasmids**: Col156 is found in nearly 100% of *S. sonnei* ST152 pandemic isolates.
+- **Large virulence plasmid**: pINV in *Shigella* would appear at 100% if the dataset is all pathogenic isolates (but pINV replicon is not reliably detected by PlasmidFinder; use the pINV screen column instead).
+- **Chromosome-integrated plasmid sequence**: rare but possible; the replicon sequence has integrated into the chromosome. Confirm by checking whether it co-localises with chromosomal genes in the assembly.
+
+---
+
+### Figures
+
+#### Fig 2 phylogenetic tree is not produced
+
+Requires ≥ 3 samples with a passed phylogenetic analysis. Check whether `--skip_local_phylo` was set, whether too few samples passed QC, and whether the SKA2/IQ-TREE process completed in `results/`.
+
+#### Fig 4 shows the simplified layout when I expected the full layout
+
+The simplified layout is triggered automatically when < 10% of plasmid-carrying isolates have same-contig AMR co-occurrence. For short-read assemblies this is expected. For long-read assemblies it may indicate that AMRFinder found no acquired genes at all (check `amrfinder_acquired_genes`), or that plasmid fragmentation is worse than expected (check N50 in the assembly metrics figure).
+
+#### Some samples are missing from the figures
+
+Samples that fail assembly QC (size or contamination) are excluded from all figures. Samples that pass QC but have no data for a specific tool (e.g. MLST failed) will appear in the tree but show as "Unknown" in ST strips.
+
+---
+
+### Performance
+
+#### The pipeline is very slow on my laptop
+
+- Set `--max_cpus 4` to reduce per-process CPU requests
+- Set `--skip_local_phylo` to skip the computationally expensive SKA2 + IQ-TREE steps
+- Use `-profile docker` if Docker is faster on your system than conda
+
+#### IQ-TREE is slow with many samples
+
+IQ-TREE scales roughly O(n²) with sample count for bootstrap calculations. For > 200 samples, consider:
+- Reducing `--iqtree_bootstraps` (minimum 1000 for UFBoot — cannot go lower)
+- Using `-profile docker` for better CPU utilisation
+- Running on a cluster with `--max_cpus 16` or more
+
+
+---
+
