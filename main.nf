@@ -700,17 +700,20 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
     TREE_ANNOTATION_ECOLI(
         ch_ecoli_tree,
         AGGREGATE_ECOLI.out.results,
-        'ecoli'
+        'ecoli',
+        params.show_tip_labels
     )
     TREE_ANNOTATION_SALMONELLA(
         ch_salmonella_tree,
         AGGREGATE_SALMONELLA.out.results,
-        'salmonella'
+        'salmonella',
+        params.show_tip_labels
     )
     TREE_ANNOTATION_SHIGELLA(
         ch_shigella_tree,
         AGGREGATE_SHIGELLA.out.results,
-        'shigella'
+        'shigella',
+        params.show_tip_labels
     )
 
     // SNP distance heatmaps — .filter skips species with no samples (NO_FILE sentinel)

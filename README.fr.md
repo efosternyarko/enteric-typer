@@ -411,6 +411,7 @@ nextflow run main.nf \
 | `--samplesheet` | `null` | CSV avec les colonnes `id,fasta` |
 | `--outdir` | `results` | Répertoire de sortie |
 | `--skip_local_phylo` | `false` | Ignorer SKA2 + IQ-TREE (sans arbre, sans matrice SNP/carte thermique) |
+| `--show_tip_labels` | `false` | Afficher les noms d'échantillons sur les étiquettes de feuilles (affiché automatiquement pour ≤ 60 échantillons ; utiliser ce paramètre pour forcer l'affichage sur les arbres plus grands avec taille de police adaptée) |
 | `--ska2_min_samples` | `3` | Nombre minimum d'échantillons pour tenter SKA2/IQ-TREE |
 | `--iqtree_model` | `GTR+G` | Modèle de substitution IQ-TREE (utiliser `MFP` pour sélection automatique) |
 | `--iqtree_bootstraps` | `100` | Réplicats bootstrap ultra-rapide IQ-TREE |

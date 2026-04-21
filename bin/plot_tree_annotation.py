@@ -194,11 +194,12 @@ def _scale_bar_value(max_x: float) -> float:
 # ── Main figure ───────────────────────────────────────────────────────────────
 
 def plot_tree_amr(
-    treefile:     Path,
-    metadata_tsv: Path,
-    outdir:       Path,
-    prefix:       str,
-    species:      str,
+    treefile:        Path,
+    metadata_tsv:    Path,
+    outdir:          Path,
+    prefix:          str,
+    species:         str,
+    show_tip_labels: bool = False,
 ) -> None:
     if not HAS_PHYLO:
         print("ERROR: biopython is not installed. Cannot draw annotated tree.", file=sys.stderr)
@@ -418,10 +419,15 @@ def plot_tree_amr(
     ax_tree.spines["top"].set_visible(False)
     ax_tree.spines["right"].set_visible(False)
 
-    if n <= 60:
+    if n <= 60 or show_tip_labels:
         max_label_len = max((len(t) for t in tips), default=10)
-        # Shrink font for long names (floor at 4 pt)
-        tip_fs = max(4.0, 5.5 - max(0, max_label_len - 20) * 0.07)
+        if n <= 60:
+            # Shrink font for long names (floor at 4 pt)
+            tip_fs = max(4.0, 5.5 - max(0, max_label_len - 20) * 0.07)
+        else:
+            # Large tree: scale font to row height so labels fit without overlap
+            row_h_pts = max(0.05, min(0.18, 10.0 / n)) * 72
+            tip_fs = max(3.0, min(6.0, row_h_pts * 0.55))
         # Widen right margin: base 1.5× + 4% per character beyond 15
         xlim_right = max_x * (1.5 + max(0, max_label_len - 15) * 0.04)
         x_label = max_x * 1.04
@@ -653,18 +659,21 @@ def main() -> None:
     p.add_argument("--metadata", "-m", required=True,  help="enteric-typer results TSV")
     p.add_argument("--outdir",   "-o", default=".",    help="Output directory")
     p.add_argument("--prefix",   "-p", default="enteric_typer")
-    p.add_argument("--species",  "-s", required=True,  choices=["ecoli", "salmonella", "shigella"])
+    p.add_argument("--species",         "-s", required=True,  choices=["ecoli", "salmonella", "shigella"])
+    p.add_argument("--show_tip_labels", action="store_true",
+                   help="Show tip labels on trees with > 60 samples (font scaled to row height)")
     args = p.parse_args()
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
     plot_tree_amr(
-        treefile     = Path(args.tree),
-        metadata_tsv = Path(args.metadata),
-        outdir       = outdir,
-        prefix       = args.prefix,
-        species      = args.species,
+        treefile        = Path(args.tree),
+        metadata_tsv    = Path(args.metadata),
+        outdir          = outdir,
+        prefix          = args.prefix,
+        species         = args.species,
+        show_tip_labels = args.show_tip_labels,
     )
 
 

@@ -16,6 +16,7 @@ process TREE_ANNOTATION {
     path(treefile)
     path(results_tsv)
     val(species_label)
+    val(show_tip_labels)
 
     output:
     path("${species_label}_fig2_tree_amr.{pdf,png}"), emit: figures, optional: true
@@ -33,6 +34,7 @@ process TREE_ANNOTATION {
         --metadata ${results_tsv} \\
         --outdir   . \\
         --prefix   ${species_label} \\
-        --species  ${species_label}
+        --species  ${species_label} \\
+        ${show_tip_labels ? '--show_tip_labels' : ''}
     """
 }
