@@ -2,14 +2,14 @@
 
 # enteric-typer
 
-Um pipeline de genotipagem com portão de espécie para agentes patogénicos entéricos. A partir de uma pasta de montagens genómicas, o pipeline identifica a espécie de cada amostra e executa as ferramentas de tipagem adequadas, gera uma filogenia SNP de genoma completo e produz figuras de resumo prontas para publicação.
+Um pipeline de genotipagem espécie-específico para agentes patogénicos entéricos. A partir de uma pasta de genomas montados, o pipeline identifica a espécie de cada amostra e executa as ferramentas de tipagem adequadas, gera uma filogenia baseada em SNPs do genoma completo e produz figuras prontas para publicação.
 
 ## Espécies suportadas
 
 | Espécie | Ferramentas de tipagem |
 |---|---|
 | *Escherichia coli* | MLST (Achtman), AMRFinder, ECTyper (serotipo), EzClermont (filogrupo Clermont), Kleborate (patotipo), PlasmidFinder, Kaptive (locus K) |
-| *Salmonella enterica* | MLST, AMRFinder, SISTR (serovar), PlasmidFinder |
+| *Salmonella enterica* | MLST (Achtman), AMRFinder, SISTR (serovar), PlasmidFinder |
 | *Shigella* spp. | MLST (Achtman), AMRFinder, ShigEiFinder (serotipo/espécie), Mykrobe (genotipagem *S. sonnei*), PlasmidFinder, rastreio pINV, rastreio de elementos IS |
 | Outra / não classificada | Identificação de espécie apenas (registado e ignorado) |
 
@@ -28,9 +28,7 @@ Montagens de entrada (pasta ou folha de amostras)
 │                                                                           │
 │  Identificação de espécie — distância Mash em relação a um esboço de     │
 │  referência de 13 genomas; a referência mais próxima vence (mesma         │
-│  abordagem que o Kleborate). Os isolados de Shigella são correctamente    │
-│  identificados porque estão mais próximos das referências Shigella do que │
-│  de qualquer referência E. coli.                                          │
+│  abordagem que o Kleborate).                                              │
 │                                                                           │
 │  Filtros de controlo de qualidade das montagens (falhas registadas e      │
 │  excluídas da tipagem)                                                    │
@@ -66,14 +64,14 @@ E. coli  Salmonella  Shigella   (outras espécies registadas e ignoradas)
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  3. FILOGENÉTICA  (por espécie, ≥ 3 amostras; ignorar com                │
 │                  --skip_local_phylo)                                     │
-│  SKA2 build (k=31) → alinhamento SNP de genoma completo + matriz de      │
-│  distâncias SNP → árvore ML IQ-TREE (modelo GTR+G;                       │
+│  SKA2 build (k=31) → alinhamento de SNPs do genoma completo + matriz de      │
+│  distâncias de SNP → gerar árvore filogenéntica IQ-TREE ML (modelo GTR+G;                       │
 │  substituir com --iqtree_model MFP)                                       │
 └──────────────────────────────────────────────────────────────────────────┘
         │
         ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  4. AGREGAÇÃO  (um TSV por espécie)                          │
+│  4. AGRuPAMENTO  (gera um TSV por espécie)                          │
 │  ecoli_typer_results.tsv                                     │
 │  salmonella_typer_results.tsv                                │
 │  shigella_typer_results.tsv                                  │
@@ -95,7 +93,7 @@ E. coli  Salmonella  Shigella   (outras espécies registadas e ignoradas)
 │  ─────────────────────────────────────────────────────────────────────   │
 │  Fig 1  Resumo da população (4 painéis):                                  │
 │           A — Distribuição dos tipos de sequência MLST                    │
-│           B — Barras de serotipo / paisagem de elementos IS (Shigella)    │
+│           B — Barras de serotipo / panorama de elementos IS (Shigella)    │
 │           C — Prevalência por classe de antibióticos                      │
 │           D — Carga de multirresistência por isolado                      │
 │  Fig 2  Árvore filogenética + faixas ST/filogrupo + mapa de calor AMR    │
@@ -104,7 +102,7 @@ E. coli  Salmonella  Shigella   (outras espécies registadas e ignoradas)
 │  Fig 5  Genes de virulência / patotipo                                    │
 │  Fig 6  Prevalência de classes AMR por tipo de sequência MLST             │
 │  Fig 7  Prevalência de classes AMR por serovar / filogrupo Clermont       │
-│  (SNP)  Mapa de calor de distâncias SNP de genoma completo por pares      │
+│  (SNP)  Mapa de calor de distâncias de SNPs do genoma completo por pares      │
 │                                                                           │
 │  Apenas Shigella                                                          │
 │  ─────────────────────────────────────────────────────────────────────   │
@@ -114,16 +112,16 @@ E. coli  Salmonella  Shigella   (outras espécies registadas e ignoradas)
 │  Controlo de qualidade das montagens (todas as espécies)                  │
 │  ─────────────────────────────────────────────────────────────────────   │
 │  Métricas de montagem  Figura de 8 painéis por espécie (PDF + PNG):      │
-│           A — Histograma comprimento do genoma   B — Caixa comprimento    │
-│           C — Histograma N50                     D — Caixa N50            │
-│           E — Histograma número de contigs       F — Caixa contigs        │
-│           G — Histograma GC%                     H — Caixa GC%            │
+│           A — Histograma de comprimento dos genomas   B — Gráfico de caixa dos comprimentos dos genomas    │
+│           C — Histograma N50                     D — Gráfico de caixa N50            │
+│           E — Histograma número de contigs       F — Gráfico de caixa contigs        │
+│           G — Histograma GC%                     H — Gráfico de caixa GC%            │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
 > **Tipagem do locus K de *E. coli* (Kaptive):** a tipagem do locus K utiliza duas bases de dados curadas executadas sequencialmente. As montagens são primeiro tipadas na **base de dados G2/G3** (`EC-K-typing_group2and3_v3.0.0.gbk`; [Gladstone et al. 2026](https://www.nature.com/articles/s41564-026-02283-w)). As amostras que permanecem não tipáveis são depois retipadas na **base de dados G1/G4** (`EC-K-typing_group1and4_v1.2.gbk`; [Foster-Nyarko et al.](https://github.com/efosternyarko/EC-K-typing-G1G4)). Os loci G2/G3 e G1/G4 são mutuamente exclusivos em *E. coli*, pelo que a tipagem sequencial garante que cada amostra é atribuída ao grupo correcto sem dupla contagem.
 
-> **Filogenética (SKA2 + IQ-TREE):** as filogenias SNP de genoma completo são construídas com [SKA2](https://github.com/bacpop/ska.rust) (alinhamento por k-meros divididos, k=31), que alinha montagens sem um genoma de referência e produz um alinhamento SNP à escala do genoma e uma matriz de distâncias SNP por pares. O alinhamento é depois passado ao IQ-TREE 2 para a inferência da árvore por máxima verosimilhança (por defeito: GTR+G; usar `--iqtree_model MFP` para activar o ModelFinder Plus). A filogenética é executada por espécie quando estão presentes ≥ 3 amostras; ignorar com `--skip_local_phylo` para execuções mais rápidas.
+> **Árvore Filogenética (SKA2 + IQ-TREE):** as filogenias com base nos SNP do genoma completo são construídas com [SKA2](https://github.com/bacpop/ska.rust) (alinhamento por k-meros divididos, k=31), que alinha genomas montados sem um genoma de referência e produz um alinhamento dos SNP à escala do genoma e uma matriz de distâncias de SNP por pares. O alinhamento é depois passado ao IQ-TREE 2 para a inferência da árvore por maximum-likelihood (por defeito: GTR+G; usar `--iqtree_model MFP` para activar o ModelFinder Plus). A análise filogenética é executada por espécie quando estão presentes ≥ 3 amostras; ignorar com `--skip_local_phylo` para execuções mais rápidas.
 
 ---
 
@@ -305,7 +303,7 @@ Genomas de referência incluídos:
 
 ### Passo 7 — Descarregar a base de dados Kraken2 (opcional)
 
-O rastreio de contaminação é **opcional** e é ignorado se `--kraken2_db` não for fornecido. Para o activar, descarregar a base de dados `k2_standard_08gb` (~8 GB) uma vez e indicar o seu caminho ao pipeline no momento da execução:
+A avaliação de contaminação é **opcional** e é ignorada se `--kraken2_db` não for fornecido. Para activar, descarregar a base de dados `k2_standard_08gb` (~8 GB) uma vez e indicar a sua localização ao pipeline no momento da execução:
 
 ```bash
 # Criar um directório para a base de dados
@@ -317,7 +315,7 @@ curl -L -O https://genome-idx.s3.amazonaws.com/kraken/k2_standard_08gb_20240904.
 tar -xzf k2_standard_08gb_20240904.tar.gz
 ```
 
-Depois indicar o caminho da base de dados ao executar o pipeline:
+Depois indicar a localização da base de dados ao executar o pipeline:
 
 ```bash
 nextflow run main.nf \
@@ -342,7 +340,7 @@ A base de dados pode ser reutilizada entre projectos. Consultar a [página de í
 > **Linux / Ubuntu / Debian:** utilizar os comandos Linux abaixo.
 > **Windows:** recomendamos executar o enteric-typer dentro do [WSL2](https://learn.microsoft.com/pt-pt/windows/wsl/install) (Subsistema Windows para Linux), que fornece um ambiente Ubuntu completo. Instalar o WSL2 e depois seguir as instruções Linux. Em alternativa, utilizar o perfil `docker` com o Docker Desktop para Windows.
 
-### Para uma pasta de montagens
+### Para uma pasta de genomas montados
 
 ```bash
 # Linux / Ubuntu / Debian / Mac Intel
@@ -364,7 +362,7 @@ nextflow run main.nf \
     -profile docker
 ```
 
-### Ou com uma folha de amostras
+### Ou com uma planilha/lista de amostras
 
 ```bash
 # Gerar automaticamente uma folha de amostras a partir de uma pasta
@@ -379,7 +377,7 @@ nextflow run main.nf \
     -profile conda
 ```
 
-### Ignorar a filogenética local (mais rápido, sem SKA2/IQ-TREE)
+### Ignorar a análise filogenética local (mais rápido, sem SKA2/IQ-TREE)
 
 ```bash
 nextflow run main.nf \
@@ -464,8 +462,8 @@ results/
 │   └── *_plasmidfinder.tsv
 │
 ├── ska2_{species}/
-│   ├── ska2_alignment.fasta       ← alinhamento SNP de genoma completo (entrada para IQ-TREE)
-│   └── snp_matrix.tsv             ← matriz de distâncias SNP de genoma completo por pares
+│   ├── ska2_alignment.fasta       ← alinhamento de SNPs do genoma completo (entrada para IQ-TREE)
+│   └── snp_matrix.tsv             ← matriz de distâncias de SNPs do genoma completo por pares
 │
 ├── ecoli_typer_results.tsv         ← Tabela de resultados principal (E. coli)
 ├── salmonella_typer_results.tsv    ← Tabela de resultados principal (Salmonella)
@@ -521,10 +519,10 @@ results/
 │
 ├── {species}_assembly_metrics.{pdf,png}
 │     Figura CQ de montagem com 8 painéis (uma por espécie detectada):
-│       A  Histograma comprimento do genoma    B  Caixa comprimento do genoma
-│       C  Histograma N50                      D  Caixa N50
-│       E  Histograma número de contigs        F  Caixa número de contigs
-│       G  Histograma GC%                      H  Caixa GC%
+│       A  Histograma do comprimento dos genomas    B  Gráfico de Caixa dos comprimentos dos genomas
+│       C  Histograma N50                      D  Gráfico de Caixa N50
+│       E  Histograma número de contigs        F  Gráfico de Caixa número de contigs
+│       G  Histograma GC%                      H  Gráfico de Caixa GC%
 │
 └── {species}_assembly_metrics_summary.tsv
       Estatísticas de montagem por amostra agregadas (genome_length, num_contigs,
@@ -541,14 +539,14 @@ Os nomes completos e as notas clínicas são apresentados abaixo.
 | Abreviatura | Classe de antibióticos | Agentes representativos |
 |---|---|---|
 | **AMG** | Aminoglicosídeo | Gentamicina, amicacina, tobramicina, estreptomicina |
-| **BLA** | Beta-lactâmico | Ampicilina, cefalosporinas, carbapenemes, penicilinas |
+| **BLA** | Beta-lactâmico | Ampicilina, cefalosporinas, carbapenemos, penicilinas |
 | **COL** | Colistina | Colistina (polimixina E), polimixina B |
 | **FOS** | Fosfomicina | Fosfomicina |
 | **FOSM** | Fosmidomicina | Fosmidomicina |
 | **LIN** | Lincosamida | Lincomicina, clindamicina |
 | **MAC** | Macrólido | Azitromicina, eritromicina |
 | **NIT** | Nitrofurano | Nitrofurantoína |
-| **PHE** | Fenicol | Cloranfenicol, florfenicol |
+| **PHE** | sFenicol | Cloranfenicol, florfenicol |
 | **QNL** | Quinolona | Ciprofloxacina, ácido nalidíxico, levofloxacina (todas as fluoroquinolonas) |
 | **SGM** | Estreptogramina | Quinupristina–dalfopristina (combinações estreptogramina A/B) |
 | **STR** | Estreptotricina | Nourseotricina |
@@ -617,7 +615,7 @@ CONDA_SUBDIR=osx-64 nextflow run main.nf \
 
 ---
 
-## Exemplo HPC
+## Exemplo de uso do pipeline em HPC
 
 ```bash
 nextflow run main.nf \
@@ -631,7 +629,7 @@ nextflow run main.nf \
 
 ## Actualizar o esboço de referência
 
-Para adicionar espécies adicionais ou actualizar os genomas de referência, editar `assets/build_references.sh` e adicionar a acessão NCBI e a etiqueta. Os nomes dos ficheiros de referência devem começar com um prefixo reconhecível:
+Para adicionar outras espécies ou actualizar os genomas de referência, editar `assets/build_references.sh` e adicionar a acessão NCBI e a etiqueta. Os nomes dos ficheiros de referência devem começar com um prefixo reconhecível:
 
 | Prefixo | Etiqueta de espécie associada |
 |---|---|
