@@ -2,20 +2,20 @@
 
 # enteric-typer
 
-Um pipeline de genotipagem com portão de espécie para agentes patogénicos entéricos. A partir de uma pasta de montagens genómicas, o pipeline identifica a espécie de cada amostra e executa as ferramentas de tipagem adequadas, gera uma filogenia SNP de genoma completo e produz figuras de resumo prontas para publicação.
+Um pipeline de genotipagem espécie-específico para agentes patogénicos entéricos. A partir de uma pasta de genomas montados, o pipeline identifica a espécie de cada amostra e executa as ferramentas de tipagem adequadas, gera uma filogenia de SNP baseada em genomas completos e produz figuras para publicação.
 
 ## Espécies suportadas
 
 | Espécie | Ferramentas de tipagem |
 |---|---|
-| *Escherichia coli* | MLST (Achtman), AMRFinder, ECTyper (serotipo), EzClermont (filogrupo Clermont), Kleborate (patotipo), PlasmidFinder, Kaptive (locus K) |
-| *Salmonella enterica* | MLST, AMRFinder, SISTR (serovar), PlasmidFinder |
-| *Shigella* spp. | MLST (Achtman), AMRFinder, ShigEiFinder (serotipo/espécie), Mykrobe (genotipagem *S. sonnei*), PlasmidFinder, rastreio pINV, rastreio de elementos IS |
+| *Escherichia coli* | MLST (Achtman), AMRFinder, ECTyper (serótipo), EzClermont (filogrupo Clermont), Kleborate (patótipo), PlasmidFinder, Kaptive (locus K) |
+| *Salmonella enterica* | MLST (Achtman), AMRFinder, SISTR (serovar), PlasmidFinder |
+| *Shigella* spp. | MLST (Achtman), AMRFinder, ShigEiFinder (serótipo/espécie), Mykrobe (genotipagem *S. sonnei*), PlasmidFinder, rastreio pINV, rastreio de elementos IS |
 | Outra / não classificada | Identificação de espécie apenas (registado e ignorado) |
 
-> **Kleborate:** executa a detecção completa do patotipo em todas as plataformas. No macOS Apple Silicon (ARM64) sem Rosetta 2, muda automaticamente para o modo apenas MLST — todas as outras ferramentas funcionam com plena capacidade independentemente da plataforma (Linux, macOS Intel/ARM64, HPC).
+> **Kleborate:** executa a deteção completa do patótipo em todas as plataformas. No macOS Apple Silicon (ARM64) sem Rosetta 2, muda automaticamente para o modo apenas MLST — todas as outras ferramentas funcionam com plena capacidade independentemente da plataforma (Linux, macOS Intel/ARM64, HPC).
 
-> **Classificação de genes de resistência:** todos os resultados AMRFinder são classificados pelo [AMRrules](https://github.com/AMRverse/AMRrules) em genes de resistência *adquirida* e genes *intrínsecos* (característicos da espécie selvagem). Os genes intrínsecos são mantidos nos ficheiros TSV de resultados como referência, mas são **excluídos de todos os gráficos AMR** para que as figuras reflictam apenas a resistência adquirida clinicamente relevante.
+> **Classificação de genes de resistência:** todos os resultados AMRFinder são classificados pelo [AMRrules](https://github.com/AMRverse/AMRrules) em genes de resistência *adquirida* e genes *intrínsecos* (característicos da espécie). Os genes intrínsecos são mantidos nos ficheiros TSV de resultados como referência, mas são **excluídos de todos os gráficos AMR** para que as figuras reflitam apenas a resistência adquirida clinicamente relevante.
 
 ## Visão geral do pipeline
 
@@ -26,13 +26,13 @@ Montagens de entrada (pasta ou folha de amostras)
 ┌───────────────────────────────────────────────────────────────────────────┐
 │  1. VERIFICAÇÃO DE ESPÉCIE E CONTROLO DE QUALIDADE                        │
 │                                                                           │
-│  Identificação de espécie — distância Mash em relação a um esboço de     │
-│  referência de 13 genomas; a referência mais próxima vence (mesma         │
+│  Identificação da espécie — distância Mash em relação a um sketch de      │
+│  13 genomas de referência; a referência mais próxima vence (mesma         │
 │  abordagem que o Kleborate). Os isolados de Shigella são correctamente    │
 │  identificados porque estão mais próximos das referências Shigella do que │
 │  de qualquer referência E. coli.                                          │
 │                                                                           │
-│  Filtros de controlo de qualidade das montagens (falhas registadas e      │
+│  Filtros de controlo de qualidade dos genomas (falhas registadas e        │
 │  excluídas da tipagem)                                                    │
 │  ──────────────────────────────────────────────────────────────────────   │
 │  Tamanho do genoma  E. coli / Shigella   4,3 – 5,9 Mb  [1]               │
@@ -53,9 +53,9 @@ E. coli  Salmonella  Shigella   (outras espécies registadas e ignoradas)
 │  ──────────────────────────    ──────────────────  ──────────────────     │
 │  MLST (achtman_4)              MLST (senterica_    MLST (achtman_4)       │
 │  AMRFinder                       achtman_2)        AMRFinder              │
-│  ECTyper (serotipo O:H)        AMRFinder           ShigEiFinder           │
-│  EzClermont (filogrupo)        SISTR (serovar)       (serotipo/espécie)   │
-│  Kleborate (patotipo)          PlasmidFinder       Mykrobe                │
+│  ECTyper (serótipo O:H)        AMRFinder           ShigEiFinder           │
+│  EzClermont (filogrupo)        SISTR (serovar)       (serótipo/espécie)   │
+│  Kleborate (patótipo)          PlasmidFinder       Mykrobe                │
 │  PlasmidFinder                                       (genótipo S. sonnei) │
 │  Kaptive locus K (G2/G3                            PlasmidFinder          │
 │    → G1/G4 se não tipável)                         rastreio pINV          │
@@ -86,44 +86,44 @@ E. coli  Salmonella  Shigella   (outras espécies registadas e ignoradas)
         │
         ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  5. FIGURAS DE RESUMO                                                     │
+│  5. FIGURAS PARA PUBLICAÇÃO                                              │
 │  Os genes de resistência intrínsecos (classificados pelo AMRrules) são   │
-│  excluídos de todas as figuras AMR — apenas os genes adquiridos são       │
-│  representados.                                                           │
-│                                                                           │
-│  Todas as espécies                                                        │
+│  excluídos de todas as figuras AMR — apenas os genes adquiridos são      │
+│  representados.                                                          │
+│                                                                          │
+│  Todas as espécies                                                       │
 │  ─────────────────────────────────────────────────────────────────────   │
-│  Fig 1  Resumo da população (4 painéis):                                  │
-│           A — Distribuição dos tipos de sequência MLST                    │
-│           B — Barras de serotipo / paisagem de elementos IS (Shigella)    │
-│           C — Prevalência por classe de antibióticos                      │
-│           D — Carga de multirresistência por isolado                      │
+│  Fig 1  Resumo da população (4 painéis):                                 │
+│           A — Distribuição dos tipos de sequência MLST                   │
+│           B — Gráfico de barras de serótipo / de elementos IS (Shigella) │
+│           C — Prevalência por classe de antibióticos                     │
+│           D — Carga de multirresistência por isolado                     │
 │  Fig 2  Árvore filogenética + faixas ST/filogrupo + mapa de calor AMR    │
-│  Fig 3  Principais genes AMR adquiridos (genes intrínsecos excluídos)     │
-│  Fig 4  Tipos de replicões plasmídicos                                    │
-│  Fig 5  Genes de virulência / patotipo                                    │
-│  Fig 6  Prevalência de classes AMR por tipo de sequência MLST             │
-│  Fig 7  Prevalência de classes AMR por serovar / filogrupo Clermont       │
-│  (SNP)  Mapa de calor de distâncias SNP de genoma completo por pares      │
-│                                                                           │
-│  Apenas Shigella                                                          │
+│  Fig 3  Principais genes AMR adquiridos (genes intrínsecos excluídos)    │
+│  Fig 4  Tipos de replicões plasmídicos                                   │
+│  Fig 5  Genes de virulência / patótipo                                   │
+│  Fig 6  Prevalência de classes AMR por tipo de sequência MLST            │
+│  Fig 7  Prevalência de classes AMR por serovar / filogrupo Clermont      │
+│  (SNP)  Mapa de calor de distâncias SNP de genoma completo por pares     │
+│                                                                          │
+│  Apenas Shigella                                                         │
 │  ─────────────────────────────────────────────────────────────────────   │
-│  Fig 8  Composição de espécies + distribuição de serotipos (barras empi.) │
+│  Fig 8  Composição de espécies + distribuição de serotipos (barras empi.)│
 │  Fig 9  Painel de virulência e invasão (ipaH, genes pINV, elementos IS)  │
-│                                                                           │
-│  Controlo de qualidade das montagens (todas as espécies)                  │
+│                                                                          │
+│  Controlo de qualidade dos genomas (todas as espécies)                   │
 │  ─────────────────────────────────────────────────────────────────────   │
 │  Métricas de montagem  Figura de 8 painéis por espécie (PDF + PNG):      │
-│           A — Histograma comprimento do genoma   B — Caixa comprimento    │
-│           C — Histograma N50                     D — Caixa N50            │
-│           E — Histograma número de contigs       F — Caixa contigs        │
-│           G — Histograma GC%                     H — Caixa GC%            │
+│           A — Histograma comprimento do genoma   B — Caixa comprimento   │
+│           C — Histograma N50                     D — Caixa N50           │
+│           E — Histograma número de contigs       F — Caixa contigs       │
+│           G — Histograma GC%                     H — Caixa GC%           │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-> **Tipagem do locus K de *E. coli* (Kaptive):** a tipagem do locus K utiliza duas bases de dados curadas executadas sequencialmente. As montagens são primeiro tipadas na **base de dados G2/G3** (`EC-K-typing_group2and3_v3.0.0.gbk`; [Gladstone et al. 2026](https://www.nature.com/articles/s41564-026-02283-w)). As amostras que permanecem não tipáveis são depois retipadas na **base de dados G1/G4** (`EC-K-typing_group1and4_v1.2.gbk`; [Foster-Nyarko et al.](https://github.com/efosternyarko/EC-K-typing-G1G4)). Os loci G2/G3 e G1/G4 são mutuamente exclusivos em *E. coli*, pelo que a tipagem sequencial garante que cada amostra é atribuída ao grupo correcto sem dupla contagem.
+> **Tipagem do locus K de *E. coli* (Kaptive):** a tipagem do locus K utiliza duas bases de dados curadas executadas sequencialmente. Os genomas são primeiro tipados com a **base de dados G2/G3** (`EC-K-typing_group2and3_v3.0.0.gbk`; [Gladstone et al. 2026](https://www.nature.com/articles/s41564-026-02283-w)). As amostras que permanecem não tipáveis são depois retipadas na **base de dados G1/G4** (`EC-K-typing_group1and4_v1.2.gbk`; [Foster-Nyarko et al.](https://github.com/efosternyarko/EC-K-typing-G1G4)). Os loci G2/G3 e G1/G4 são mutuamente exclusivos em *E. coli*, pelo que a tipagem sequencial garante que cada amostra é atribuída ao grupo correcto sem dupla contagem.
 
-> **Filogenética (SKA2 + IQ-TREE):** as filogenias SNP de genoma completo são construídas com [SKA2](https://github.com/bacpop/ska.rust) (alinhamento por k-meros divididos, k=31), que alinha montagens sem um genoma de referência e produz um alinhamento SNP à escala do genoma e uma matriz de distâncias SNP por pares. O alinhamento é depois passado ao IQ-TREE 2 para a inferência da árvore por máxima verosimilhança (por defeito: GTR+G; usar `--iqtree_model MFP` para activar o ModelFinder Plus). A filogenética é executada por espécie quando estão presentes ≥ 3 amostras; ignorar com `--skip_local_phylo` para execuções mais rápidas.
+> **Filogenética (SKA2 + IQ-TREE):** as filogenias SNP de genoma completo são construídas com [SKA2](https://github.com/bacpop/ska.rust) (alinhamento por k-mers, k=31), que alinha genomas sem um genoma de referência e produz um alinhamento SNP à escala do genoma e uma matriz de distâncias SNP por pares. O alinhamento é depois passado ao IQ-TREE 2 para a inferência da árvore por máxima verosimilhança (por defeito: GTR+G; usar `--iqtree_model MFP` para activar o ModelFinder Plus). A filogenética é executada por espécie quando estão presentes ≥ 3 amostras; ignorar com `--skip_local_phylo` para execuções mais rápidas.
 
 ---
 
@@ -173,11 +173,11 @@ Verificar: `java -version`
 curl -s https://get.nextflow.io | bash
 ```
 
-O instalador cria um executável `nextflow` no directório actual. Movê-lo para uma localização no `$PATH` para que possa ser executado a partir de qualquer lado:
+O instalador cria um executável `nextflow` no diretório actual. Movê-lo para uma localização no `$PATH` para que possa ser executado a partir de qualquer lado:
 
 **macOS**
 ```bash
-# Se o Homebrew estiver instalado, mover para o directório bin do Homebrew (já no $PATH):
+# Se o Homebrew estiver instalado, mover para o diretório bin do Homebrew (já no $PATH):
 mv nextflow /opt/homebrew/bin/        # Apple Silicon (M1/M2/M3)
 # ou
 mv nextflow /usr/local/bin/           # Mac Intel
@@ -246,7 +246,7 @@ source ~/.bashrc   # Linux (bash)
 ```
 
 **Windows**
-Descarregar o [instalador Miniforge3 para Windows](https://github.com/conda-forge/miniforge/releases/latest) e executá-lo. Quando solicitado, seleccionar *Add Miniforge to my PATH*. Depois reinicializar:
+Descarregar o [instalador Miniforge3 para Windows](https://github.com/conda-forge/miniforge/releases/latest) e executá-lo. Quando solicitado, selecionar *Add Miniforge to my PATH*. Depois reinicializar:
 ```powershell
 conda init powershell
 ```
@@ -261,7 +261,7 @@ Reiniciar o PowerShell.
 
 ### Passo 5 — Instalar ncbi-datasets-cli e mash
 
-Ambos são necessários para o `build_references.sh` descarregar genomas de referência e construir o esboço de espécie:
+Ambos são necessários para o `build_references.sh` descarregar genomas de referência e construir o sketch de espécie:
 
 ```bash
 mamba install -c conda-forge ncbi-datasets-cli
@@ -270,9 +270,9 @@ mamba install -c bioconda mash
 
 ---
 
-### Passo 6 — Construir o esboço de referência Mash
+### Passo 6 — Construir o sketch de referência Mash
 
-Este passo descarrega 13 genomas de referência do NCBI e constrói o esboço Mash utilizado para a identificação de espécies. Executar uma vez antes da primeira execução do pipeline:
+Este passo descarrega 13 genomas de referência do NCBI e constrói o sketch Mash utilizado para a identificação de espécies. Executar uma vez antes da primeira execução do pipeline:
 
 ```bash
 bash assets/build_references.sh
@@ -299,13 +299,13 @@ Genomas de referência incluídos:
 | *S. dysenteriae* | Sd197 | GCF_000012005.1 |
 | *K. pneumoniae* | HS11286 | GCF_000240185.1 |
 
-> A identificação de espécies utiliza a abordagem **a referência mais próxima vence** (mesma abordagem que o Kleborate): o grupo de espécies com a menor distância Mash em relação a qualquer referência no esboço é atribuído. Os isolados genuínos de *Shigella* são correctamente identificados porque a sua referência mais próxima é sempre um genoma de *Shigella* (distância Mash < 0,012), enquanto os isolados *E. coli* do filogrupo B2 — filogeneticamente próximos de *Shigella* mas não sendo *Shigella* — obtêm distâncias menores para as referências *E. coli* (~0,007) do que para qualquer referência *Shigella* (≥ 0,014) e são correctamente classificados como *E. coli*.
+> A identificação de espécies utiliza a abordagem **a referência mais próxima vence** (mesma abordagem que o Kleborate): o grupo de espécies com a menor distância Mash em relação a qualquer referência no sketch é atribuído. Os isolados genuínos de *Shigella* são correctamente identificados porque a sua referência mais próxima é sempre um genoma de *Shigella* (distância Mash < 0,012), enquanto os isolados *E. coli* do filogrupo B2 — filogeneticamente próximos de *Shigella* mas não sendo *Shigella* — obtêm distâncias menores para as referências *E. coli* (~0,007) do que para qualquer referência *Shigella* (≥ 0,014) e são correctamente classificados como *E. coli*.
 
 ---
 
 ### Passo 7 — Descarregar a base de dados Kraken2 (opcional)
 
-O rastreio de contaminação é **opcional** e é ignorado se `--kraken2_db` não for fornecido. Para o activar, descarregar a base de dados `k2_standard_08gb` (~8 GB) uma vez e indicar o seu caminho ao pipeline no momento da execução:
+A avaliação de contaminação é **opcional** e é ignorada se `--kraken2_db` não for fornecido. Para a activar, descarregar a base de dados `k2_standard_08gb` (~8 GB) uma vez e indicar a sua localização ao pipeline no momento da execução:
 
 ```bash
 # Criar um directório para a base de dados
@@ -317,7 +317,7 @@ curl -L -O https://genome-idx.s3.amazonaws.com/kraken/k2_standard_08gb_20240904.
 tar -xzf k2_standard_08gb_20240904.tar.gz
 ```
 
-Depois indicar o caminho da base de dados ao executar o pipeline:
+Depois indicar a localização da base de dados ao executar o pipeline:
 
 ```bash
 nextflow run main.nf \
@@ -331,7 +331,7 @@ A base de dados pode ser reutilizada entre projectos. Consultar a [página de í
 
 > **Os filtros de tamanho de genoma** não requerem configuração — os limiares são aplicados automaticamente com base na classificação da espécie. Os valores por defeito podem ser substituídos com, por exemplo, `--ecoli_min_length 4000000`.
 >
-> Os limiares baseiam-se em critérios de controlo de qualidade publicados:
+> Os limites baseiam-se em critérios de controlo de qualidade publicados:
 > \[1\] *E. coli* / *Shigella* — [Critérios de qualidade de genomas *E. coli* do BIGSdb](https://bigsdb.pasteur.fr/ecoli/genomes-quality-criteria/)
 > \[2\] *Salmonella* — [Recomendações do consórcio PATH-SAFE para a vigilância genómica de doenças de origem alimentar](https://science.food.gov.uk/article/143833-path-safe-consortium-recommendations-for-genomic-surveillance-of-foodborne-diseases-using-salmonella-as-an-exemplar?attachment_id=300637) (Tabela 3)
 
@@ -342,7 +342,7 @@ A base de dados pode ser reutilizada entre projectos. Consultar a [página de í
 > **Linux / Ubuntu / Debian:** utilizar os comandos Linux abaixo.
 > **Windows:** recomendamos executar o enteric-typer dentro do [WSL2](https://learn.microsoft.com/pt-pt/windows/wsl/install) (Subsistema Windows para Linux), que fornece um ambiente Ubuntu completo. Instalar o WSL2 e depois seguir as instruções Linux. Em alternativa, utilizar o perfil `docker` com o Docker Desktop para Windows.
 
-### Para uma pasta de montagens
+### Para uma pasta de genomas montados
 
 ```bash
 # Linux / Ubuntu / Debian / Mac Intel
@@ -364,7 +364,7 @@ nextflow run main.nf \
     -profile docker
 ```
 
-### Ou com uma folha de amostras
+### Ou com uma planilha/lista de amostras
 
 ```bash
 # Gerar automaticamente uma folha de amostras a partir de uma pasta
@@ -379,7 +379,7 @@ nextflow run main.nf \
     -profile conda
 ```
 
-### Ignorar a filogenética local (mais rápido, sem SKA2/IQ-TREE)
+### Ignorar a análise filogenética local (mais rápido, sem SKA2/IQ-TREE)
 
 ```bash
 nextflow run main.nf \
@@ -417,7 +417,7 @@ nextflow run main.nf \
 
 ---
 
-## Ficheiros de saída
+## Ficheiros finais
 
 ```
 results/
@@ -474,7 +474,7 @@ results/
 │
 │   Todas as tabelas principais incluem:
 │     amrfinder_acquired_genes   — genes de resistência (intrínsecos excluídos)
-│     amrfinder_intrinsic_genes  — genes intrínsecos selvagens (sinalizados, não representados)
+│     amrfinder_intrinsic_genes  — genes intrínsecos (sinalizados, não representados)
 │     amrfinder_genes            — todos os resultados AMRFinder em bruto
 │
 │ ── Figuras de resumo (PDF + PNG) ───────────────────────────────────────
@@ -498,7 +498,7 @@ results/
 │
 ├── {species}_fig3_amr_genes.{pdf,png}      ← Frequências de genes AMR adquiridos
 ├── {species}_fig4_plasmid_replicons.{pdf,png}
-├── {species}_fig5_virulence.{pdf,png}       ← Genes de virulência / patotipo
+├── {species}_fig5_virulence.{pdf,png}       ← Genes de virulência / patótipo
 │
 ├── {species}_fig6_amr_by_st.{pdf,png}
 │     Mapa de calor AMRnet: % de isolados com cada classe, por ST MLST
@@ -557,7 +557,7 @@ Os nomes completos e as notas clínicas são apresentados abaixo.
 | **TET** | Tetraciclina | Tetraciclina, doxiciclina, tigeciclina |
 | **TMP** | Trimetoprim | Trimetoprim (frequentemente combinado com sulfonamida como cotrimoxazol) |
 
-> **Definição de MDR:** um isolado é classificado como multirresistente (MDR) quando possui genes de resistência adquirida em **≥ 3** das classes acima. A classe EFFLUX é excluída da contagem MDR, uma vez que as bombas de efluxo quase universais são intrínsecas à espécie e removidas pelo AMRrules antes da produção das figuras.
+> **Definição de MDR:** um isolado é classificado como multirresistente (MDR) quando possui genes de resistência adquirida em **≥ 3** das classes acima mencionadas. A classe EFFLUX é excluída da contagem MDR, uma vez que as bombas de efluxo são quase universalmente intrínsecas à espécie e removidas pelo AMRrules antes da produção das figuras.
 
 ---
 
@@ -571,7 +571,7 @@ rm -rf work/ .nextflow/ .nextflow.log*
 
 > **Sugestão:** manter `work/` se quiser utilizar `-resume` para executar novamente com parâmetros diferentes sem repetir os passos já concluídos. Apagar apenas quando a execução estiver finalizada.
 >
-> **Nota sobre `-resume` e anotação da árvore:** se uma execução anterior não produziu uma figura de anotação (por exemplo, devido a uma actualização de software), o Nextflow pode armazenar em cache o estado de falha. Executar uma vez **sem `-resume`** para forçar uma nova execução limpa do passo de anotação.
+> **Nota sobre `-resume` e anotação da árvore:** se uma execução anterior não produziu uma figura de anotação (por exemplo, devido a uma atualização de software), o Nextflow pode armazenar em cache o estado de falha. Executar uma vez **sem `-resume`** para forçar uma nova execução limpa do passo de anotação.
 
 ---
 
@@ -605,7 +605,7 @@ conda install -c conda-forge graphviz
 
 ### macOS Apple Silicon (M1 e superior)
 
-Alguns pacotes Bioconda não têm compilação nativa arm64. Adicionar o perfil `arm64` para forçar a emulação Rosetta 2 — as ferramentas funcionam a velocidade quase-nativa e o pipeline produz resultados idênticos ao Linux. O Kleborate utilizará automaticamente o modo apenas MLST no ARM64 se as suas dependências completas de patotipo estiverem indisponíveis, mas todas as outras ferramentas funcionam com plena capacidade:
+Alguns pacotes Bioconda não têm compilação nativa arm64. Adicionar o perfil `arm64` para forçar a emulação Rosetta 2 — as ferramentas funcionam a velocidade quase-nativa e o pipeline produz resultados idênticos ao Linux. O Kleborate utilizará automaticamente o modo apenas MLST no ARM64 se as suas dependências completas de patótipo estiverem indisponíveis, mas todas as outras ferramentas funcionam com plena capacidade:
 
 ```bash
 CONDA_SUBDIR=osx-64 nextflow run main.nf \
@@ -630,7 +630,7 @@ nextflow run main.nf \
 
 ---
 
-## Actualizar o esboço de referência
+## Atualizar o sketch de referência
 
 Para adicionar espécies adicionais ou actualizar os genomas de referência, editar `assets/build_references.sh` e adicionar a acessão NCBI e a etiqueta. Os nomes dos ficheiros de referência devem começar com um prefixo reconhecível:
 
@@ -642,7 +642,7 @@ Para adicionar espécies adicionais ou actualizar os genomas de referência, edi
 | `Klebsiella_` | `Klebsiella` |
 | `Enterobacter_` | `Enterobacter` |
 
-Após editar, reconstruir o esboço:
+Após editar, reconstruir o sketch:
 ```bash
 bash assets/build_references.sh
 ```
