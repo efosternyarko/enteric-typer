@@ -542,7 +542,7 @@ Os nomes completos e as notas clínicas são apresentados abaixo.
 | Abreviatura | Classe de antibióticos | Agentes representativos |
 |---|---|---|
 | **AMG** | Aminoglicosídeo | Gentamicina, amicacina, tobramicina, estreptomicina |
-| **BLA** | Beta-lactâmico | Ampicilina, cefalosporinas, carbapenemes, penicilinas |
+| **BLA** | Beta-lactâmico | Ampicilina, cefalosporinas, carbapenemos, penicilinas |
 | **COL** | Colistina | Colistina (polimixina E), polimixina B |
 | **FOS** | Fosfomicina | Fosfomicina |
 | **FOSM** | Fosmidomicina | Fosmidomicina |
