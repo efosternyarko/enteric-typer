@@ -1285,16 +1285,27 @@ def _fig_virulence_salmonella(df: pd.DataFrame, outdir: Path, prefix: str, top_n
 
 # ── Figures 7 & 8: AMRnet-style tile heatmaps ────────────────────────────────
 
-# Colour map: 0 % = mid-grey; >0 % → cream → orange → dark-red → purple
-_AMRNET_GREY  = np.array([0.502, 0.502, 0.502])
-_AMRNET_CMAP  = LinearSegmentedColormap("amrnet_pos", {
-    "red":   [(0.0, 1.000, 1.000), (0.5, 1.000, 1.000),
-              (0.8, 0.741, 0.741), (1.0, 0.290, 0.290)],
-    "green": [(0.0, 0.973, 0.973), (0.5, 0.600, 0.600),
-              (0.8, 0.031, 0.031), (1.0, 0.004, 0.004)],
-    "blue":  [(0.0, 0.882, 0.882), (0.5, 0.302, 0.302),
-              (0.8, 0.051, 0.051), (1.0, 0.549, 0.549)],
-})
+# 0 % cells always shown as mid-grey (absent = not detected)
+_AMRNET_GREY = np.array([0.502, 0.502, 0.502])
+
+# Six palette options selectable via --amrnet_palette A-F
+# Each is a 5-stop gradient anchored at 0/25/50/75/100 % as shown in palette preview.
+_AMRNET_PALETTES: dict[str, matplotlib.colors.Colormap] = {
+    "A": LinearSegmentedColormap.from_list("rdbu_inv",
+         ["#2166AC", "#92c5de", "#f7f7f7", "#f4a582", "#B2182B"]),
+    "B": LinearSegmentedColormap.from_list("rdylbu_inv",
+         ["#313695", "#82b8d7", "#efeac4", "#f67d4b", "#A50026"]),
+    "C": LinearSegmentedColormap.from_list("spectral_inv",
+         ["#3288BD", "#abdda4", "#ffffbf", "#fdae61", "#D53E4F"]),
+    "D": LinearSegmentedColormap.from_list("coolwarm_mpl",
+         ["#3B4CC0", "#99baff", "#dddddc", "#f7a889", "#B40426"]),
+    "E": LinearSegmentedColormap.from_list("skip_pale",
+         ["#2166AC", "#69a3ce", "#aca4a6", "#a84133", "#6B0000"]),
+    "F": LinearSegmentedColormap.from_list("blue_teal_red",
+         ["#0D3B66", "#1e90a0", "#8ab47f", "#e89d4a", "#C73E1D"]),
+}
+
+_AMRNET_CMAP = _AMRNET_PALETTES["A"]   # default; overridden by --amrnet_palette
 
 # Canonical short abbreviations for drug classes
 _DC_ABBREV: dict[str, str] = {
@@ -1383,8 +1394,11 @@ def _amrnet_matrix(
     return pd.DataFrame(rows, index=labels, columns=all_cls)
 
 
-def _draw_amrnet_ax(ax: plt.Axes, mat: pd.DataFrame, title: str) -> None:
+def _draw_amrnet_ax(ax: plt.Axes, mat: pd.DataFrame, title: str,
+                    cmap: matplotlib.colors.Colormap = None) -> None:
     """Draw one AMRnet tile heatmap onto *ax*."""
+    if cmap is None:
+        cmap = _AMRNET_CMAP
     nrows, ncols = mat.shape
     ax.set_xlim(-0.5, ncols - 0.5)
     ax.set_ylim(-0.5, nrows - 0.5)
@@ -1394,7 +1408,7 @@ def _draw_amrnet_ax(ax: plt.Axes, mat: pd.DataFrame, title: str) -> None:
     for ri in range(nrows):
         for ci in range(ncols):
             pct  = mat.iloc[ri, ci]
-            face = _AMRNET_GREY if pct == 0 else np.array(_AMRNET_CMAP(pct / 100))[:3]
+            face = _AMRNET_GREY if pct == 0 else np.array(cmap(pct / 100))[:3]
             ax.add_patch(mpatches.FancyBboxPatch(
                 (ci - TILE / 2, ri - TILE / 2), TILE, TILE,
                 boxstyle="square,pad=0",
@@ -1420,11 +1434,11 @@ def _draw_amrnet_ax(ax: plt.Axes, mat: pd.DataFrame, title: str) -> None:
     ax.set_title(title, fontsize=9, fontweight="bold", pad=14)
 
     legend_items = [
-        mpatches.Patch(facecolor=_AMRNET_GREY,                 label="0 %"),
-        mpatches.Patch(facecolor=_AMRNET_CMAP(0.01)[:3],       label="1–25 %"),
-        mpatches.Patch(facecolor=_AMRNET_CMAP(0.50)[:3],       label="50 %"),
-        mpatches.Patch(facecolor=_AMRNET_CMAP(0.80)[:3],       label="75–80 %"),
-        mpatches.Patch(facecolor=_AMRNET_CMAP(1.00)[:3],       label="100 %"),
+        mpatches.Patch(facecolor=_AMRNET_GREY,          label="0 %"),
+        mpatches.Patch(facecolor=cmap(0.01)[:3],        label="1–25 %"),
+        mpatches.Patch(facecolor=cmap(0.50)[:3],        label="50 %"),
+        mpatches.Patch(facecolor=cmap(0.80)[:3],        label="75–80 %"),
+        mpatches.Patch(facecolor=cmap(1.00)[:3],        label="100 %"),
     ]
     ax.legend(handles=legend_items, loc="lower right",
               bbox_to_anchor=(1.02, -0.12), ncol=len(legend_items),
@@ -1432,7 +1446,8 @@ def _draw_amrnet_ax(ax: plt.Axes, mat: pd.DataFrame, title: str) -> None:
               handletextpad=0.4, columnspacing=0.8)
 
 
-def fig_amrnet_by_st(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
+def fig_amrnet_by_st(df: pd.DataFrame, outdir: Path, prefix: str,
+                     cmap: matplotlib.colors.Colormap = None) -> None:
     """Fig 7 — AMR drug class % by MLST ST."""
     mat = _amrnet_matrix(df, "mlst_st", top_n=12)
     if mat.empty or mat.shape[1] == 0:
@@ -1447,12 +1462,14 @@ def fig_amrnet_by_st(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     else:
         sp = "Escherichia coli"
     _draw_amrnet_ax(ax, mat,
-                    f"{sp} — AMR drug class prevalence by sequence type (ST)")
+                    f"{sp} — AMR drug class prevalence by sequence type (ST)",
+                    cmap=cmap)
     plt.tight_layout()
     _save(fig, outdir, f"{prefix}_fig6_amr_by_st")
 
 
-def fig_amrnet_by_group(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
+def fig_amrnet_by_group(df: pd.DataFrame, outdir: Path, prefix: str,
+                        cmap: matplotlib.colors.Colormap = None) -> None:
     """Fig 8 — AMR drug class % by serovar (Salmonella) or phylogroup (E. coli)."""
     is_sal = "sistr_serovar" in df.columns
     if is_sal:
@@ -1489,7 +1506,8 @@ def fig_amrnet_by_group(df: pd.DataFrame, outdir: Path, prefix: str) -> None:
     fig, ax = plt.subplots(figsize=(max(6, ncols * 0.85 + 3),
                                     max(4, nrows * 0.55 + 2)))
     _draw_amrnet_ax(ax, mat,
-                    f"{sp} — AMR drug class prevalence by {grp_name}")
+                    f"{sp} — AMR drug class prevalence by {grp_name}",
+                    cmap=cmap)
     plt.tight_layout()
     _save(fig, outdir, f"{prefix}_fig7_amr_by_group")
 
@@ -1858,6 +1876,12 @@ def main() -> None:
     p.add_argument("--plasmid_map", "-m", default=None,
                    help="Path to aggregate plasmid_amr_map.tsv; used to colour "
                         "fig4 replicon bars by dominant drug class.")
+    p.add_argument("--amrnet_palette", default="A",
+                   choices=list(_AMRNET_PALETTES),
+                   help="Colour palette for AMR heatmaps (fig6/fig7). "
+                        "A=RdBu-inv, B=RdYlBu-inv, C=Spectral-inv, "
+                        "D=Coolwarm, E=Custom-skip-pale, F=Blue-teal-red. "
+                        "Default: A.")
     args = p.parse_args()
 
     outdir = Path(args.outdir)
@@ -1869,14 +1893,16 @@ def main() -> None:
     if df.empty:
         sys.exit("ERROR: no data after loading — check --format")
 
+    amrnet_cmap = _AMRNET_PALETTES[args.amrnet_palette]
+
     print("Generating figures…", file=sys.stderr)
     fig_population_summary(df, outdir, args.prefix)
     # Fig 2 (tree-annotated resistome heatmap) is generated by plot_tree_annotation.py
     fig_amr_genes(df, outdir, args.prefix)
     fig_plasmid_replicons(df, outdir, args.prefix, plasmid_map_path=args.plasmid_map)
     fig_virulence(df, outdir, args.prefix)
-    fig_amrnet_by_st(df, outdir, args.prefix)
-    fig_amrnet_by_group(df, outdir, args.prefix)
+    fig_amrnet_by_st(df, outdir, args.prefix, cmap=amrnet_cmap)
+    fig_amrnet_by_group(df, outdir, args.prefix, cmap=amrnet_cmap)
     # Shigella-specific figures (silently skipped for non-Shigella datasets)
     fig_shigella_serotypes(df, outdir, args.prefix)
     fig_shigella_features(df, outdir, args.prefix)

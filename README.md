@@ -458,6 +458,7 @@ nextflow run main.nf \
 | `--outdir` | `results` | Output directory |
 | `--skip_local_phylo` | `false` | Skip SKA2 + IQ-TREE (no tree, no SNP matrix/heatmap) |
 | `--show_tip_labels` | `false` | Show sample names on tree tip labels (auto-shown for ≤ 60 samples; use this flag to force labels on larger trees with font size scaled to fit) |
+| `--amrnet_palette` | `A` | Colour palette for AMR heatmaps (fig6/fig7). `A` RdBu-inv · `B` RdYlBu-inv · `C` Spectral-inv · `D` Coolwarm · `E` Custom-skip-pale · `F` Blue-teal-red |
 | `--ska2_min_samples` | `3` | Minimum samples to attempt SKA2/IQ-TREE |
 | `--iqtree_model` | `GTR+G` | IQ-TREE substitution model (use `MFP` for automatic model selection) |
 | `--iqtree_bootstraps` | `100` | IQ-TREE ultrafast bootstrap replicates |

@@ -16,6 +16,7 @@ process PLOT_SUMMARY {
     path(results_tsv)
     val(species_label)
     path(plasmid_amr_map)
+    val(amrnet_palette)
 
     output:
     path("${species_label}_fig*.{pdf,png}"), emit: figures
@@ -24,10 +25,11 @@ process PLOT_SUMMARY {
     def map_arg = plasmid_amr_map.name != 'NO_FILE' ? "--plasmid_map ${plasmid_amr_map}" : ""
     """
     plot_summary.py \\
-        --input   ${results_tsv} \\
-        --format  enteric-typer \\
-        --outdir  . \\
-        --prefix  ${species_label} \\
+        --input           ${results_tsv} \\
+        --format          enteric-typer \\
+        --outdir          . \\
+        --prefix          ${species_label} \\
+        --amrnet_palette  ${amrnet_palette} \\
         ${map_arg}
     """
 }

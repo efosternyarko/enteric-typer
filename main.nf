@@ -684,17 +684,20 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
     PLOT_SUMMARY_ECOLI(
         AGGREGATE_ECOLI.out.results,
         'ecoli',
-        AGGREGATE_PLASMID_AMR_MAP.out.summary
+        AGGREGATE_PLASMID_AMR_MAP.out.summary,
+        params.amrnet_palette
     )
     PLOT_SUMMARY_SALMONELLA(
         AGGREGATE_SALMONELLA.out.results,
         'salmonella',
-        file("NO_FILE")
+        file("NO_FILE"),
+        params.amrnet_palette
     )
     PLOT_SUMMARY_SHIGELLA(
         AGGREGATE_SHIGELLA.out.results,
         'shigella',
-        file("NO_FILE")
+        file("NO_FILE"),
+        params.amrnet_palette
     )
 
     TREE_ANNOTATION_ECOLI(
