@@ -1876,7 +1876,7 @@ def main() -> None:
     p.add_argument("--plasmid_map", "-m", default=None,
                    help="Path to aggregate plasmid_amr_map.tsv; used to colour "
                         "fig4 replicon bars by dominant drug class.")
-    p.add_argument("--amrnet_palette", default="A",
+    p.add_argument("--amrnet_palette", default="C",
                    choices=list(_AMRNET_PALETTES),
                    help="Colour palette for AMR heatmaps (fig6/fig7). "
                         "A=RdBu-inv, B=RdYlBu-inv, C=Spectral-inv, "
