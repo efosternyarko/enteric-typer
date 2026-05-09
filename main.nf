@@ -203,7 +203,35 @@ workflow {
     if (params.input_dir) {
         ch_samples = Channel
             .fromPath("${params.input_dir}/*.{fasta,fa,fna,fas,fsa}", checkIfExists: true)
-            .map { fasta -> tuple(fasta.baseName.replaceAll(/\.(fasta|fa|fna|fas|fsa)$/, ''), fasta) }
+            .map { fasta ->
+                // Detect ont-assembler suffixes (_final / _chromosome / _plasmid).
+                // Strip the suffix from the sample ID so all three files for the
+                // same barcode share the same base name and can be deduplicated.
+                def m      = fasta.baseName =~ /_(final|chromosome|plasmid)$/
+                def suffix = m ? m[0][1] : 'none'
+                def base   = m ? fasta.baseName.replaceAll(/_(final|chromosome|plasmid)$/, '')
+                               : fasta.baseName
+                tuple(base, suffix, fasta)
+            }
+            .groupTuple(by: 0)
+            .flatMap { base, suffixes, fastas ->
+                def finalIdx = suffixes.findIndexOf { it == 'final' }
+                if (finalIdx >= 0) {
+                    // _final.fasta exists — use it; silently drop chromosome/plasmid
+                    def nSkipped = suffixes.count { it in ['chromosome', 'plasmid'] }
+                    if (nSkipped > 0)
+                        log.warn "ont-assembler output detected for '${base}': " +
+                                 "using _final assembly, skipping ${nSkipped} " +
+                                 "chromosome/plasmid file(s)"
+                    [ tuple(base, fastas[finalIdx]) ]
+                } else {
+                    // No _final — keep each file with its original sample ID
+                    [suffixes, fastas].transpose().collect { s, f ->
+                        def sid = (s == 'none') ? base : "${base}_${s}"
+                        tuple(sid, f)
+                    }
+                }
+            }
     } else {
         ch_samples = Channel
             .fromPath(params.samplesheet)
