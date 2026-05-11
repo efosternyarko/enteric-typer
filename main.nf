@@ -69,6 +69,9 @@ include { PLOT_PLASMID_OVERVIEW as PLOT_PLASMID_OVERVIEW_ECOLI      } from './mo
 include { PLOT_PLASMID_OVERVIEW as PLOT_PLASMID_OVERVIEW_SALMONELLA } from './modules/plot_plasmid_overview'
 include { PLOT_PLASMID_OVERVIEW as PLOT_PLASMID_OVERVIEW_SHIGELLA   } from './modules/plot_plasmid_overview'
 include { AMRFINDER_UPDATE                                          } from './modules/amrfinder_update'
+include { PATHOGENWATCH as PATHOGENWATCH_ECOLI                      } from './modules/pathogenwatch'
+include { PATHOGENWATCH as PATHOGENWATCH_SALMONELLA                 } from './modules/pathogenwatch'
+include { PATHOGENWATCH as PATHOGENWATCH_SHIGELLA                   } from './modules/pathogenwatch'
 
 // ── Help ──────────────────────────────────────────────────────────────────────
 if (params.help) {
@@ -618,6 +621,42 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // PHASE 3b: Pathogenwatch upload + cgMLST clustering (optional)
+    // ─────────────────────────────────────────────────────────────────────────
+    ch_pw_ecoli_tsv      = 'NO_FILE'
+    ch_pw_salmonella_tsv = 'NO_FILE'
+    ch_pw_shigella_tsv   = 'NO_FILE'
+
+    if (params.run_pathogenwatch) {
+        def ecoli_col_name = params.pathogenwatch_ecoli_collection_name
+            ?: "enteric-typer-ecoli-${workflow.runName}"
+        def salm_col_name  = params.pathogenwatch_salmonella_collection_name
+            ?: "enteric-typer-salmonella-${workflow.runName}"
+        def shig_col_name  = params.pathogenwatch_shigella_collection_name
+            ?: "enteric-typer-shigella-${workflow.runName}"
+
+        PATHOGENWATCH_ECOLI(
+            ch_ecoli.map { id, fasta -> [id, fasta] }.collect(),
+            'ecoli',
+            ecoli_col_name
+        )
+        PATHOGENWATCH_SALMONELLA(
+            ch_salmonella.map { id, fasta -> [id, fasta] }.collect(),
+            'salmonella',
+            salm_col_name
+        )
+        PATHOGENWATCH_SHIGELLA(
+            ch_shigella.map { id, fasta -> [id, fasta] }.collect(),
+            'shigella',
+            shig_col_name
+        )
+
+        ch_pw_ecoli_tsv      = PATHOGENWATCH_ECOLI.out.results.map      { sp, f -> f.toString() }
+        ch_pw_salmonella_tsv = PATHOGENWATCH_SALMONELLA.out.results.map { sp, f -> f.toString() }
+        ch_pw_shigella_tsv   = PATHOGENWATCH_SHIGELLA.out.results.map   { sp, f -> f.toString() }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // PHASE 4: Aggregate per species
     // ─────────────────────────────────────────────────────────────────────────
     AGGREGATE_ECOLI(
@@ -626,7 +665,7 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
         ECTYPER.out.map            { id, f -> f }.collect().ifEmpty([]),
         PLASMIDFINDER_ECOLI.out.map{ id, f -> f }.collect().ifEmpty([]),
         ch_ecoli_ktype,
-        'NO_FILE',
+        ch_pw_ecoli_tsv,
         file("${projectDir}/assets/ecoli_st_complexes.tsv"),
         file("${projectDir}/assets/amrrules/Escherichia_coli.tsv"),
         'ecoli',
@@ -641,7 +680,7 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
         SISTR.out.map                   { id, f -> f }.collect().ifEmpty([]),
         PLASMIDFINDER_SALMONELLA.out.map{ id, f -> f }.collect().ifEmpty([]),
         [],
-        'NO_FILE',
+        ch_pw_salmonella_tsv,
         file("${projectDir}/assets/salmonella_st_complexes.tsv"),
         file("${projectDir}/assets/amrrules/Salmonella_enterica.tsv"),
         'salmonella',
@@ -655,7 +694,7 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
         SHIGEIFINDER.out.map             { id, f -> f }.collect().ifEmpty([]),
         PLASMIDFINDER_SHIGELLA.out.map   { id, f -> f }.collect().ifEmpty([]),
         [],
-        'NO_FILE',
+        ch_pw_shigella_tsv,
         file("${projectDir}/assets/sonnei_st_complexes.tsv"),
         file("${projectDir}/assets/amrrules/Escherichia_coli.tsv"),
         'shigella',
