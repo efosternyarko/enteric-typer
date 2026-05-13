@@ -31,17 +31,22 @@ class PathogenwatchError(RuntimeError):
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Pathogenwatch upload + cgMLST + cluster client")
-    p.add_argument("--samplesheet",      required=True)
-    p.add_argument("--collection-name",  required=True)
-    p.add_argument("--thresholds",       default="5,10,20,50",
+    p.add_argument("--samplesheet",          required=True)
+    p.add_argument("--collection-name",      required=True)
+    p.add_argument("--thresholds",           default="5,10,20,50",
                    help="Comma-separated cgMLST allele-difference thresholds")
-    p.add_argument("--poll-seconds",     type=int, default=60)
-    p.add_argument("--max-wait-seconds", type=int, default=3600)
-    p.add_argument("--sample-output",    required=True)
-    p.add_argument("--collection-output",required=True)
-    p.add_argument("--summary-output",   required=True)
-    p.add_argument("--base-url",         default=os.environ.get("PW_API_BASE_URL", DEFAULT_BASE_URL))
-    p.add_argument("--api-key",          default=os.environ.get("PW_API_KEY"))
+    p.add_argument("--poll-seconds",         type=int, default=60)
+    p.add_argument("--max-wait-seconds",     type=int, default=3600)
+    p.add_argument("--tree-poll-seconds",    type=int, default=30,
+                   help="Seconds between tree-availability polls")
+    p.add_argument("--tree-max-wait-seconds",type=int, default=300,
+                   help="Max seconds to wait for collection tree (0 = skip tree)")
+    p.add_argument("--sample-output",        required=True)
+    p.add_argument("--collection-output",    required=True)
+    p.add_argument("--summary-output",       required=True)
+    p.add_argument("--tree-output",          default=None)
+    p.add_argument("--base-url",             default=os.environ.get("PW_API_BASE_URL", DEFAULT_BASE_URL))
+    p.add_argument("--api-key",              default=os.environ.get("PW_API_KEY"))
     return p.parse_args()
 
 
@@ -167,6 +172,61 @@ def collection_details(session, base_url, collection_uuid) -> dict:
                         params={"uuid": collection_uuid})
 
 
+def _trigger_tree_build(session, base_url, collection_uuid) -> None:
+    """Best-effort trigger of server-side tree building. Swallows failures."""
+    for endpoint, method, body in [
+        (f"{base_url}/api/collections/{collection_uuid}/build-tree", "POST", {}),
+        (f"{base_url}/api/collections/build-tree",                   "POST", {"uuid": collection_uuid}),
+        # Fetching collection details can trigger lazy tree computation on some versions
+        (f"{base_url}/api/collections/details?uuid={collection_uuid}", "GET", None),
+    ]:
+        try:
+            if method == "POST":
+                r = session.post(endpoint, json=body, timeout=30)
+            else:
+                r = session.get(endpoint, timeout=30)
+            if r.status_code in (200, 201, 202, 204):
+                print(f"  Tree build trigger sent ({endpoint})", file=sys.stderr)
+                return
+        except Exception:
+            pass
+
+
+def wait_for_tree(session, base_url, collection_uuid, tree_output_path: Path | None,
+                  poll_seconds: int = 30, max_wait: int = 600) -> bool:
+    """Poll until the collection Newick tree is available, triggering build each cycle."""
+    if tree_output_path is None:
+        return False
+
+    tree_endpoints = [
+        f"{base_url}/api/collections/tree?uuid={collection_uuid}",
+        f"{base_url}/api/collections/{collection_uuid}/tree",
+    ]
+
+    deadline = time.monotonic() + max_wait
+    attempt  = 0
+    while time.monotonic() < deadline:
+        _trigger_tree_build(session, base_url, collection_uuid)
+        for endpoint in tree_endpoints:
+            try:
+                r = session.get(endpoint, timeout=120)
+                if r.status_code == 200 and r.text.strip().startswith("("):
+                    tree_output_path.write_text(r.text)
+                    print(f"  Collection tree written to {tree_output_path} "
+                          f"(attempt {attempt + 1})", file=sys.stderr)
+                    return True
+            except Exception:
+                pass
+        attempt += 1
+        remaining = max(0, int(deadline - time.monotonic()))
+        print(f"  Tree not yet ready (attempt {attempt}, "
+              f"{remaining}s remaining) — retrying in {poll_seconds}s…", file=sys.stderr)
+        time.sleep(min(poll_seconds, remaining + 1))
+
+    print("  Collection tree unavailable after polling — skipping.", file=sys.stderr)
+    return False
+
+
 # ── Clustering ────────────────────────────────────────────────────────────────
 
 def cluster_details_threshold(session, base_url, genome_uuid, threshold: int) -> dict:
@@ -201,7 +261,8 @@ def build_column_names(thresholds: list[int]) -> list[str]:
         "pw_status", "pw_species", "pw_organism_id",
         "pw_genome_id", "pw_genome_uuid", "pw_checksum",
         "pw_collection_id", "pw_collection_uuid", "pw_collection_url",
-        "pw_cgmlst_st", "pw_amr_available",
+        "pw_cgmlst_st",
+        "pw_tree_available", "pw_amr_available",
     ]
     for t in thresholds:
         base += [f"pw_cluster{t}_status", f"pw_cluster{t}_count", f"pw_cluster{t}_labels"]
@@ -253,6 +314,7 @@ def main() -> int:
 
     collection:      dict | None = None
     collection_meta: dict        = {}
+    tree_downloaded              = False
 
     if top_group and len(uploaded) > 1:
         organism_id = str(top_group["organismId"])
@@ -262,6 +324,14 @@ def main() -> int:
         collection      = create_collection(session, base_url, organism_id,
                                             genome_ids, args.collection_name)
         collection_meta = collection_details(session, base_url, str(collection["uuid"]))
+
+        # Poll until tree is built — triggers build attempts on each cycle
+        tree_output = Path(args.tree_output) if args.tree_output else None
+        tree_downloaded = wait_for_tree(
+            session, base_url, str(collection["uuid"]), tree_output,
+            poll_seconds=args.tree_poll_seconds,
+            max_wait=args.tree_max_wait_seconds,
+        )
 
     # Per-genome cluster searches at each threshold
     rows: list[dict] = []
@@ -284,6 +354,7 @@ def main() -> int:
             "pw_collection_uuid":  collection.get("uuid") if collection else "NA",
             "pw_collection_url":   collection.get("url")  if collection else "NA",
             "pw_cgmlst_st":        details.get("cgmlstSt", "NA"),
+            "pw_tree_available":   str(tree_downloaded),
             "pw_amr_available":    str(bool(details.get("hasAmr"))),
         }
 

@@ -1,7 +1,7 @@
 // ── PATHOGENWATCH: upload assemblies and retrieve cgMLST + cluster data ───────
 // Uploads all confirmed species assemblies to Pathogenwatch, waits for
-// processing, creates a collection, and retrieves per-genome cgMLST cluster
-// assignments at multiple allele-difference thresholds.
+// processing, creates a collection, and polls until the collection tree is
+// built (retrying the build trigger each poll cycle).
 //
 // Requires PW_API_KEY to be set as a Nextflow secret or environment variable.
 //   Set with: nextflow secrets set PW_API_KEY <your_key>
@@ -26,6 +26,7 @@ process PATHOGENWATCH {
     tuple val(species_label), path("pathogenwatch_samples.tsv"), emit: results
     path "pathogenwatch_collection.json",                         emit: collection
     path "pathogenwatch_summary.json",                            emit: summary
+    path "pathogenwatch_tree.nwk",                                emit: tree, optional: true
 
     script:
     // .collect() on a tuple channel produces a flat list [id1,fasta1,id2,fasta2,...]
@@ -44,9 +45,12 @@ CSV
         --thresholds             ${thresholds} \\
         --poll-seconds           ${params.pathogenwatch_poll_seconds} \\
         --max-wait-seconds       ${params.pathogenwatch_max_wait_seconds} \\
+        --tree-poll-seconds      ${params.pathogenwatch_tree_poll_seconds} \\
+        --tree-max-wait-seconds  ${params.pathogenwatch_tree_max_wait_seconds} \\
         --sample-output          pathogenwatch_samples.tsv \\
         --collection-output      pathogenwatch_collection.json \\
         --summary-output         pathogenwatch_summary.json \\
+        --tree-output            pathogenwatch_tree.nwk \\
         2>&1
     """
 }
