@@ -5,5 +5,6 @@ channels:
   - nodefaults
 dependencies:
   - kaptive=3.2.1
+  - mappy
   - biopython
   - pandas

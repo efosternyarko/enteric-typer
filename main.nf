@@ -522,11 +522,9 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
     // ─────────────────────────────────────────────────────────────────────────
     // PHASE 2c: E. coli K-locus typing
     // ─────────────────────────────────────────────────────────────────────────
-    ch_g2g3_db        = file("${projectDir}/assets/kaptive_dbs/EC-K-typing_group2and3_v3.0.0.gbk",
+    ch_g2g3_db        = file("${projectDir}/assets/kaptive_dbs/EC-K-typing_group2and3_v4.0.0.gbk",
                               checkIfExists: true)
-    ch_g1g4_db        = file("${projectDir}/assets/kaptive_dbs/EC-K-typing_group1and4_v0.9.gbk",
-                              checkIfExists: true)
-    ch_normalise_script = file("${projectDir}/bin/normalise_kaptive_scores.py",
+    ch_g1g4_db        = file("${projectDir}/assets/kaptive_dbs/EC-K-typing_group1and4_v1.3.gbk",
                               checkIfExists: true)
 
     KAPTIVE_G2G3(ch_ecoli_typed, ch_g2g3_db)
@@ -541,7 +539,7 @@ Adjust threshold with --max_contamination (current: ${params.max_contamination}%
         .set { ch_g2g3_branched }
 
     ch_for_g1g4 = ch_g2g3_branched.untypeable.map { id, fasta, g2g3_tsv -> tuple(id, fasta) }
-    KAPTIVE_G1G4(ch_for_g1g4, ch_g1g4_db, ch_normalise_script)
+    KAPTIVE_G1G4(ch_for_g1g4, ch_g1g4_db)
 
     ch_g2g3_for_merge = KAPTIVE_G2G3.out.results.map { id, fasta, tsv -> tuple(id, tsv) }
     ch_g1g4_for_merge = KAPTIVE_G1G4.out.results

@@ -9,10 +9,11 @@
 //     Step 2.
 //
 //   Step 2 — KAPTIVE_G1G4:
-//     Run Kaptive v3 in --scores mode on G2/G3-untypeable assemblies using
-//     the Group 1/4 database (651 loci). Raw scores are then normalised by
-//     expected locus CDS length (normalise_kaptive_scores.py) to achieve
-//     100% typeability on G1/G4 strains.
+//     Type G2/G3-untypeable assemblies against the Group 1/4 database
+//     (v1.3, 490 loci) with bin/type_g1g4.py: gene-level alignment scores are
+//     normalised by expected locus CDS length (Norm AS). Kaptive >= 3.3 removed
+//     --scores, so Kaptive is not used for this step. Kaptive is pinned to
+//     3.2.x in envs/kaptive.yml for the G2/G3 step (3.3.x changes G2/G3 calls).
 //
 // NOTE: G1/G4 and G2/G3 loci are MUTUALLY EXCLUSIVE in E. coli — running both
 //       databases simultaneously causes wzy-interference misclassification.
@@ -61,40 +62,31 @@ process KAPTIVE_G1G4 {
     label 'medium'
 
     conda     "${projectDir}/envs/kaptive.yml"
-    container 'quay.io/biocontainers/kaptive:3.0.0b5--pyhdfd78af_0'
+    container 'quay.io/biocontainers/kaptive:3.2.1--pyhdfd78af_0'
 
     input:
     tuple val(sample_id), path(fasta)   // only G2/G3-untypeable samples
     path(g1g4_db)
-    path(normalise_script)
 
     output:
     tuple val(sample_id), path("${sample_id}_kaptive_g1g4.tsv"), emit: results
 
     script:
     """
-    # Run Kaptive in --scores mode (gene-by-gene alignment — achieves 100% typeability)
-    kaptive assembly \\
-        ${g1g4_db} \\
-        ${fasta} \\
-        -s ${sample_id}_kaptive_g1g4_raw_scores.tsv \\
-        -t ${task.cpus} \\
-        2>${sample_id}_kaptive_g1g4.log \\
+    # Normalised gene-level scoring (independent of the Kaptive version; see
+    # efosternyarko/EC-K-typing-G1G4 scripts/type_g1g4.py)
+    type_g1g4.py \
+        --db ${g1g4_db} \
+        --assemblies ${fasta} \
+        --out ${sample_id}_kaptive_g1g4.tsv \
+        -t ${task.cpus} \
+        2>${sample_id}_kaptive_g1g4.log \
     || true
 
-    # Normalise scores by expected locus CDS length
-    if [ -s "${sample_id}_kaptive_g1g4_raw_scores.tsv" ]; then
-        python3 ${normalise_script} \\
-            --db  ${g1g4_db} \\
-            --in  ${sample_id}_kaptive_g1g4_raw_scores.tsv \\
-            --out ${sample_id}_kaptive_g1g4.tsv \\
-            --min-coverage 0.50 \\
-            2>>${sample_id}_kaptive_g1g4.log
-    else
-        # Kaptive produced no scores — write minimal untypeable result
-        printf 'Assembly\\tBest match locus\\tBest match confidence\\tGenes found\\tGenes expected\\tGene coverage\\tRaw AS\\tNorm AS\\n' \\
+    if [ ! -s "${sample_id}_kaptive_g1g4.tsv" ]; then
+        printf 'Assembly\tBest match locus\tBest match confidence\tGenes found\tGenes expected\tGene coverage\tRaw AS\tNorm AS\n' \
             > "${sample_id}_kaptive_g1g4.tsv"
-        printf '%s\\tnone\\tUntypeable\\t0\\t0\\t0.0%%\\t0\\t0.0\\n' "${sample_id}" \\
+        printf '%s\tnone\tUntypeable\t0\t0\t0.0%%\t0\t0.0\n' "${sample_id}" \
             >> "${sample_id}_kaptive_g1g4.tsv"
     fi
     """
