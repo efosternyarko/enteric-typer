@@ -130,13 +130,15 @@ E. coli  Salmonella  Shigella   (other species logged and skipped)
 ```
 
 > **E. coli K-locus typing (Kaptive):** K-locus typing uses two curated databases run sequentially.
-> Assemblies are first typed against the **G2/G3 database** (`EC-K-typing_group2and3_v3.0.0.gbk`;
+> Assemblies are first typed against the **G2/G3 database** (`EC-K-typing_group2and3_v4.0.0.gbk`;
 > [Gladstone et al. 2026](https://www.nature.com/articles/s41564-026-02283-w)).
 > Samples that remain untypeable are then re-typed against the **G1/G4 database**
-> (`EC-K-typing_group1and4_v1.2.gbk`;
+> (`EC-K-typing_group1and4_v1.3.gbk`;
 > [Foster-Nyarko et al.](https://github.com/efosternyarko/EC-K-typing-G1G4)).
 > G2/G3 and G1/G4 loci are mutually exclusive in *E. coli*, so sequential typing
 > ensures each sample is assigned to the correct group without double-counting.
+>
+> The G1/G4 step scores gene-level alignments normalised by expected locus CDS length (`bin/type_g1g4.py`), independent of the Kaptive version; Kaptive itself is pinned to 3.2.1 for the G2/G3 step.
 
 > **Phylogenetics (SKA2 + IQ-TREE):** whole-genome SNP phylogenies are built using
 > [SKA2](https://github.com/bacpop/ska.rust) (split k-mer alignment, k=31),
